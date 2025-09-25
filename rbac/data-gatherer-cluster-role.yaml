@@ -1,0 +1,130 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: data-gatherer
+  labels:
+    app: data-gatherer
+    purpose: workload-analysis
+rules:
+# Core workload resources - cluster-wide read access
+- apiGroups: ["apps"]
+  resources: 
+    - deployments
+    - statefulsets
+    - daemonsets
+    - replicasets
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: ["batch"]
+  resources:
+    - jobs
+    - cronjobs
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: ["apps.openshift.io"]
+  resources:
+    - deploymentconfigs
+  verbs: ["get", "list", "watch"]
+
+# Core resources needed for context and analysis
+- apiGroups: [""]
+  resources:
+    - namespaces
+    - nodes
+    - pods
+    - persistentvolumeclaims
+    - services
+    - configmaps
+    - secrets
+  verbs: ["get", "list", "watch"]
+
+# Resource metrics for capacity analysis
+- apiGroups: ["metrics.k8s.io"]
+  resources:
+    - nodes
+    - pods
+  verbs: ["get", "list"]
+
+# OpenShift-specific resources for comprehensive analysis
+- apiGroups: ["route.openshift.io"]
+  resources:
+    - routes
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: ["image.openshift.io"] 
+  resources:
+    - imagestreams
+    - imagestreamtags
+  verbs: ["get", "list", "watch"]
+
+# Build resources (optional but useful for full analysis)
+- apiGroups: ["build.openshift.io"]
+  resources:
+    - builds
+    - buildconfigs
+  verbs: ["get", "list", "watch"]
+
+# Storage classes and persistent volumes for capacity analysis
+- apiGroups: ["storage.k8s.io"]
+  resources:
+    - storageclasses
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: [""]
+  resources:
+    - persistentvolumes
+  verbs: ["get", "list", "watch"]
+
+# HPA for scaling analysis
+- apiGroups: ["autoscaling"]
+  resources:
+    - horizontalpodautoscalers
+  verbs: ["get", "list", "watch"]
+
+# Network policies for security context
+- apiGroups: ["networking.k8s.io"]
+  resources:
+    - networkpolicies
+    - ingresses
+  verbs: ["get", "list", "watch"]
+
+# Pod disruption budgets (resiliency / availability guarantees)
+- apiGroups: ["policy"]
+  resources:
+    - poddisruptionbudgets
+  verbs: ["get", "list", "watch"]
+
+# Scheduling classes (cluster capacity / overcommit understanding)
+- apiGroups: ["scheduling.k8s.io"]
+  resources:
+    - priorityclasses
+  verbs: ["get", "list", "watch"]
+
+# EndpointSlices for service topology insights (future analysis)
+- apiGroups: ["discovery.k8s.io"]
+  resources:
+    - endpointslices
+  verbs: ["get", "list", "watch"]
+
+# Resource quotas and limit ranges for capacity analysis
+- apiGroups: [""]
+  resources:
+    - resourcequotas
+    - limitranges
+  verbs: ["get", "list", "watch"]
+
+# OpenShift quota resources
+- apiGroups: ["quota.openshift.io"]
+  resources:
+    - clusterresourcequotas
+  verbs: ["get", "list", "watch"]
+
+# Custom Resource Definitions to understand what CRDs are deployed
+- apiGroups: ["apiextensions.k8s.io"]
+  resources:
+    - customresourcedefinitions
+  verbs: ["get", "list", "watch"]
+
+# Non-resource URLs for version information
+- nonResourceURLs: ["/version", "/api", "/api/*", "/apis", "/apis/*"]
+  verbs: ["get"]

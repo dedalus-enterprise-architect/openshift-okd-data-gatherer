@@ -62,14 +62,14 @@ venv.bak/
 *~
 
 # Configuration files (contain sensitive data)
-config/
-*.yaml
-*.yml
-!example-config.yaml
-!README.md
+
+!config/example-config.yaml
+!config/README.md
+config/config.yaml
 !.github/**/*.yml
 !.github/**/*.yaml
-!.copilot-tracking/
+.copilot-tracking/
+.github/instructions/
 
 # Data directories
 clusters/

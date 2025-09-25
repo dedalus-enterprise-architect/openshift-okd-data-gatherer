@@ -1,0 +1,57 @@
+# OpenShift Resource Analyzer Configuration Examples
+
+# Configuration with kubeconfig file
+clusters:
+  - name: local-cluster
+    kubeconfig: ~/.kube/config
+    include_kinds: [Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, Node]
+    ignore_system_namespaces: true
+    exclude_namespaces: []
+    parallelism: 4
+
+  # Configuration with service account token
+  - name: prod-openshift
+    credentials:
+      host: https://api.prod.openshift.company.com:6443
+      token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IkdGaVpfZ..."
+      verify_ssl: true
+      ca_file: /etc/ssl/certs/openshift-ca.crt
+    include_kinds: [Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, BuildConfig, Node]
+    ignore_system_namespaces: true
+    exclude_namespaces: [temp-namespace, scratch-*]
+    parallelism: 8
+
+  # Configuration with username/password (not recommended for production)
+  - name: dev-cluster
+    credentials:
+      host: https://api.dev.k8s.local:6443
+      username: admin
+      password: admin123
+      verify_ssl: false
+    include_kinds: [Deployment, StatefulSet, Node]
+    ignore_system_namespaces: false
+    exclude_namespaces: []
+    parallelism: 2
+
+  # Configuration with client certificates
+  - name: secure-cluster
+    credentials:
+      host: https://api.secure.company.com:6443
+      cert_file: /path/to/client.crt
+      key_file: /path/to/client.key
+      ca_file: /path/to/ca.crt
+      verify_ssl: true
+    include_kinds: [Deployment, StatefulSet, DaemonSet, Node]
+    ignore_system_namespaces: true
+    exclude_namespaces: [monitoring, logging]
+    parallelism: 6
+
+# Global settings
+logging:
+  level: INFO
+  format: json
+
+# Storage settings
+storage:
+  base_dir: ./clusters  # where cluster data directories are created
+  write_manifest_files: true  # set false to skip writing raw manifests to disk
