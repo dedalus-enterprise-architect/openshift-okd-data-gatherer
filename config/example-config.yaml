@@ -1,4 +1,4 @@
-# OpenShift Resource Analyzer Configuration Examples
+# Data Gatherer Configuration Examples
 
 # Configuration with kubeconfig file
 clusters:
