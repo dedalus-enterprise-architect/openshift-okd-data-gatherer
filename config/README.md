@@ -27,9 +27,10 @@ Recommended practices:
 
 ### Top-level Structure
 ```yaml
-clusters:      # List of cluster entries (required)
-logging:       # Logging configuration (optional)
-storage:       # Storage configuration (optional)
+clusters:            # List of cluster entries (required)
+system_namespaces:   # Global system namespace patterns (optional)
+logging:             # Logging configuration (optional)
+storage:             # Storage configuration (optional)
 ```
 
 ### Cluster Entry Options
@@ -87,9 +88,11 @@ clusters:
 ```
 
 ### Namespace Filtering
-* Set `ignore_system_namespaces: true` to automatically exclude system namespaces
-* Add patterns to `exclude_namespaces` (e.g. `temp-*`, `sandbox-?`)
-* Wildcards are supported for pattern matching
+* Set `ignore_system_namespaces: true` to automatically exclude namespaces defined in the global `system_namespaces` list
+* Define custom system namespace patterns globally using `system_namespaces` (supports wildcards)
+* Add patterns to `exclude_namespaces` for cluster-specific exclusions (e.g. `temp-*`, `sandbox-?`)
+* Wildcards are supported for pattern matching in both global and cluster-specific exclusions
+* Custom exclusions in `exclude_namespaces` are applied in addition to system namespace filtering
 
 ### Complete Example
 ```yaml
@@ -104,6 +107,14 @@ clusters:
     exclude_namespaces: []
     parallelism: 4
 
+system_namespaces:
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - default
+  - openshift
+  - openshift-*
+
 logging:
    level: INFO
    format: json
@@ -114,6 +125,9 @@ storage:
 ```
 
 ## Configuration Variables
+
+### Global System Namespaces
+- `system_namespaces`: List of namespace patterns to exclude when `ignore_system_namespaces: true` (supports wildcards like `openshift-*`)
 
 ### Logging Options
 - `level`: DEBUG, INFO, WARNING, ERROR (default: `INFO`)
