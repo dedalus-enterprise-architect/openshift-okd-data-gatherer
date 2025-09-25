@@ -11,7 +11,7 @@ config/
 ```
 
 ## Security & Secrets Handling
-🔒 The entire `config/` directory is **gitignored** – do not remove that protection. Treat contents as sensitive:
+
 * Service account tokens / bearer tokens
 * API endpoints
 * CA certs / client certs / keys
