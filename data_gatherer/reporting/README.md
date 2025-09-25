@@ -44,13 +44,13 @@ Reports apply a unified rules engine to highlight configuration quality issues. 
 ### Severity & Visual Encoding
 | Category | Style | Meaning |
 |----------|-------|---------|
-| ERROR_MISS | Red background (`error-miss-cell`) | Required value missing (CPU/Mem request, readiness probe) |
-| WARNING_MISS | Yellow background (`warning-miss-cell`) | Recommended value missing (CPU/Mem limit) |
-| ERROR_MISCONF | Red text (`error-misconf-cell`) | Limit >= smallest node size (likely misconfiguration) |
-| WARNING_MISCONF | Orange text (`warning-misconf-cell`) | Request ≤ 20% of limit or ImagePullPolicy=Always |
+| ERROR_MISS | Red background (`error-miss-cell`) | Required value or parameter is missing |
+| WARNING_MISS | Yellow background (`warning-miss-cell`) | Recommended value or parameter is missing |
+| ERROR_MISCONF | Red text (`error-misconf-cell`) | Wrong value or parameter set |
+| WARNING_MISCONF | Orange text (`warning-misconf-cell`) | Value or parameter set should be re-evaluated |
 
 ### Implemented Rules
-Current rules (see `rules/official_rules.py`):
+Current rules and severity assigned (see `rules/official_rules.py`):
 1. Missing CPU request (ERROR_MISS)
 2. Missing Memory request (ERROR_MISS)
 3. Missing CPU limit (WARNING_MISS)
@@ -62,17 +62,6 @@ Current rules (see `rules/official_rules.py`):
 
 ### Rule Implementation
 Rules are defined in `rules/official_rules.py` and dispatched through the rules engine (`rules/engine.py`). The renderer (`common.format_cell_with_condition`) applies the CSS class corresponding to the highest severity rule triggered for that cell.
-
-### Structural Row Styling
-Some rows convey aggregation or context rather than individual container data and have neutral background styling:
-| Row Class | Meaning |
-|-----------|---------|
-| totals-row-main | Totals (main containers) |
-| totals-row-all | Totals (all containers incl. init) |
-| totals-row-overhead | Init container overhead delta |
-| ns-totals | Per-namespace aggregated totals |
-
-These classes appear in the legend under "Structural Rows" for orientation only; they do not imply a severity.
 
 ## Usage
 
