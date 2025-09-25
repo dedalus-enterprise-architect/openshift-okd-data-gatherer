@@ -50,15 +50,17 @@ Reports apply a unified rules engine to highlight configuration quality issues. 
 | WARNING_MISCONF | Orange text (`warning-misconf-cell`) | Value or parameter set should be re-evaluated |
 
 ### Implemented Rules
-Current rules and severity assigned (see `rules/official_rules.py`):
-1. Missing CPU request (ERROR_MISS)
-2. Missing Memory request (ERROR_MISS)
-3. Missing CPU limit (WARNING_MISS)
-4. Missing Memory limit (WARNING_MISS)
-5. Readiness probe missing / not configured (ERROR_MISS)
-6. ImagePullPolicy set to Always (WARNING_MISCONF)
-7. CPU or Memory request ≤ 20% of its corresponding limit (WARNING_MISCONF)
-8. CPU limit ≥ smallest node CPU OR Memory limit ≥ smallest node Memory (ERROR_MISCONF)
+Inline HTML span styling encodes severity (background for missing, colored text for misconfiguration). Only the rule description text is styled — the explicit severity label remains unstyled for clarity.
+
+1. <span style="background:#f8d7da;color:#611a1d;padding:2px 4px;border-radius:3px;">Missing CPU request</span> (ERROR_MISS)
+2. <span style="background:#f8d7da;color:#611a1d;padding:2px 4px;border-radius:3px;">Missing Memory request</span> (ERROR_MISS)
+3. <span style="background:#fff3cd;color:#7a5a00;padding:2px 4px;border-radius:3px;">Missing CPU limit</span> (WARNING_MISS)
+4. <span style="background:#fff3cd;color:#7a5a00;padding:2px 4px;border-radius:3px;">Missing Memory limit</span> (WARNING_MISS)
+5. <span style="background:#f8d7da;color:#611a1d;padding:2px 4px;border-radius:3px;">Readiness probe missing / not configured</span> (ERROR_MISS)
+6. <span style="color:#c06000;">ImagePullPolicy set to Always</span> (WARNING_MISCONF)
+7. <span style="color:#c06000;">CPU or Memory requests value is lower or equal than 20% of its corresponding limits</span> (WARNING_MISCONF)
+8. <span style="color:#b00020;">CPU limits value is higher than the total amount of CPUs of the smallest cluster worker node</span> (ERROR_MISCONF)
+8. <span style="color:#b00020;">Memory limits value is higher than the total amount of RAM of the smallest cluster worker node</span> (ERROR_MISCONF)
 
 ### Rule Implementation
 Rules are defined in `rules/official_rules.py` and dispatched through the rules engine (`rules/engine.py`). The renderer (`common.format_cell_with_condition`) applies the CSS class corresponding to the highest severity rule triggered for that cell.
