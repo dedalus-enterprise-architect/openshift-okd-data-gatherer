@@ -1,37 +1,16 @@
 # Configuration
 
-Configuration reference for the OpenShift Resource Analyzer. RBAC assets have been moved to the dedicated `rbac/` directory.
+Configuration reference for `config.yaml` and related credential files.
 
-## Contents
-1. Overview
-2. Directory Structure
-3. Security & Secrets Handling
-4. Application Configuration (`config.yaml`)
-5. Cluster Entry Examples (kubeconfig / credentials)
-6. Namespace Exclusions & Kind Selection
-7. Example `config.yaml` snippet
-8. RBAC Reference Location
-
----
-
-## 1. Overview
-The analyzer gathers workload controller manifests (Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, DeploymentConfigs, optional BuildConfigs) and node capacity data. It does not fetch live Pod objects. Data is stored in a file-based SQLite DB under `clusters/<name>/` with normalized manifests and retention for deleted workloads.
-
-## 2. Directory Structure
+## Directory Structure
 ```
 config/
 ├── config.yaml          # Main configuration (required)
 ├── *.crt / *.pem        # Optional: CA / client certs
 └── *.token              # Optional: raw token files (if you store them)
-
-rbac/
-├── openshift-resource-analyzer-cluster-role.yaml          # ClusterRole (read-only)
-├── openshift-resource-analyzer-cluster-role-binding.yaml  # Binding
-├── setup-rbac.sh                                          # Setup script
-└── README.md                                              # RBAC documentation
 ```
 
-## 3. Security & Secrets Handling
+## Security & Secrets Handling
 🔒 The entire `config/` directory is **gitignored** – do not remove that protection. Treat contents as sensitive:
 * Service account tokens / bearer tokens
 * API endpoints
@@ -39,16 +18,21 @@ rbac/
 * Kubeconfig paths
 
 Recommended practices:
-* Use **service account token** with least-privilege custom ClusterRole (provided).
-* Avoid embedding long‑lived user tokens.
-* Rotate service account tokens yearly (script uses 8760h duration).
-* Keep `verify_ssl: true` in production with a valid CA (supply `ca_file` if needed).
+* Use **service account token** with least-privilege custom ClusterRole
+* Avoid embedding long‑lived user tokens
+* Rotate service account tokens yearly
+* Keep `verify_ssl: true` in production with a valid CA (supply `ca_file` if needed)
 
-## 4. Application Configuration (`config.yaml`)
-Top-level keys:
-* `clusters`: list of cluster entries
-* `logging`: level & format (json|text)
-* `storage`: base_dir & deleted retention days
+## Configuration Format (`config.yaml`)
+
+### Top-level Structure
+```yaml
+clusters:      # List of cluster entries (required)
+logging:       # Logging configuration (optional)
+storage:       # Storage configuration (optional)
+```
+
+### Cluster Entry Options
 
 Each cluster entry supports either:
 * `kubeconfig: /path/to/kubeconfig`
@@ -56,13 +40,14 @@ OR
 * `credentials: { host, token | username/password | cert_file/key_file, ca_file, verify_ssl }`
 
 Additional per-cluster fields:
-* `include_kinds`: list of kinds (must match tool's supported static map)
-* `ignore_system_namespaces`: auto-exclude common kube/openshift namespaces
-* `exclude_namespaces`: extra exclusions (supports wildcards)
-* `parallelism`: concurrent kind fetch workers
+* `include_kinds`: list of resource kinds to collect
+* `ignore_system_namespaces`: auto-exclude system namespaces (boolean)
+* `exclude_namespaces`: additional namespace exclusions (supports wildcards)
+* `parallelism`: concurrent workers for data collection
 
-## 5. Cluster Entry Examples
-### a. Kubeconfig
+### Authentication Methods
+
+#### Kubeconfig File
 ```yaml
 clusters:
    - name: prod
@@ -73,7 +58,7 @@ clusters:
       parallelism: 4
 ```
 
-### b. Service Account Token
+#### Service Account Token
 ```yaml
 clusters:
    - name: staging
@@ -87,49 +72,60 @@ clusters:
       exclude_namespaces: []
 ```
 
-### c. Client Certificate
+#### Client Certificate
 ```yaml
 clusters:
-   - name: hardened
-      credentials:
-         host: https://api.secure.example.com:6443
-         cert_file: /secure/client.crt
-         key_file: /secure/client.key
-         ca_file: /secure/ca.crt
-         verify_ssl: true
-      include_kinds: [Deployment, StatefulSet, Node]
-      ignore_system_namespaces: true
+  - name: secure
+    credentials:
+      host: https://api.secure.example.com:6443
+      cert_file: /secure/client.crt
+      key_file: /secure/client.key
+      ca_file: /secure/ca.crt
+      verify_ssl: true
+    include_kinds: [Deployment, StatefulSet, Node]
+    ignore_system_namespaces: true
 ```
 
-## 6. Namespace Exclusions & Kind Selection
-* Set `ignore_system_namespaces: true` to automatically exclude core kube/openshift system namespaces.
-* Add patterns (e.g. `temp-*`, `sandbox-?`) to `exclude_namespaces` – wildcards are parsed into pattern vs exact matching.
-* Remove kinds you do not need to minimize API calls and storage.
+### Namespace Filtering
+* Set `ignore_system_namespaces: true` to automatically exclude system namespaces
+* Add patterns to `exclude_namespaces` (e.g. `temp-*`, `sandbox-?`)
+* Wildcards are supported for pattern matching
 
-## 7. Example Minimal `config.yaml`
+### Complete Example
 ```yaml
 clusters:
-   - name: prod-cluster
-      credentials:
-         host: https://api.cluster.example.com:6443
-         token: "eyJhbGc..."
-         verify_ssl: false  # set true with proper CA
-      include_kinds: [Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, Node]
-      ignore_system_namespaces: true
-      exclude_namespaces: []
-      parallelism: 4
+  - name: prod-cluster
+    credentials:
+      host: https://api.cluster.example.com:6443
+      token: "eyJhbGc..."
+      verify_ssl: false  # set true with proper CA
+    include_kinds: [Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, Node]
+    ignore_system_namespaces: true
+    exclude_namespaces: []
+    parallelism: 4
 
 logging:
    level: INFO
    format: json
 
 storage:
-   base_dir: ./clusters
-   keep_deleted_days: 30
+  base_dir: ./clusters
+  write_manifest_files: true
 ```
 
----
-## 8. RBAC Reference Location
-RBAC manifests & detailed permissions documentation have moved to `rbac/README.md`.
+## Configuration Variables
 
-For advanced usage & feature roadmap see project root `README.md`.
+### Logging Options
+- `level`: DEBUG, INFO, WARNING, ERROR (default: `INFO`)
+- `format`: json or text (default: `json`)
+
+### Storage Options
+- `base_dir`: Directory for cluster data storage (default: `clusters`)
+- `write_manifest_files`: Write raw manifests to disk (default: `true`)
+
+### Cluster Options
+- `name`: Unique cluster identifier (required)
+- `include_kinds`: Resource types to collect (default: `[Deployment, StatefulSet, DaemonSet, CronJob, DeploymentConfig, Node]`)
+- `ignore_system_namespaces`: Skip system namespaces (default: `true`)
+- `exclude_namespaces`: Additional namespace exclusions (supports wildcards)
+- `parallelism`: Concurrent collection workers (default: `4`)
