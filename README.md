@@ -8,7 +8,7 @@ End‑user tool to take a clean snapshot of workload controller manifests and no
 * Fast, parallel collection with namespace filtering
 * Deterministic normalized manifests (stable for diffing outside this tool)
 * Lightweight on-cluster access (read‑only RBAC provided)
-* HTML reports (summary, capacity, nodes, container configuration) with automatic highlighting of missing or risky settings
+* HTML reports (summary, capacity, nodes, container configuration) with a unified severity legend (missing vs misconfiguration) for quick visual scanning
 
 The database always reflects the latest sync; removed objects disappear automatically (no history retention/purging to manage).
 
@@ -194,7 +194,7 @@ Typical flow: `init --all-clusters` → periodic `sync --all-clusters` → `repo
 
 ---
 ## 7. Reports Overview (Summary Only)
-Available HTML report types provide inventory, capacity aggregation, container configuration auditing, and node sizing snapshots. Each report includes a concise legend and automatic highlighting for missing or risky configuration.
+Available HTML report types provide inventory, capacity aggregation, container configuration auditing, and node sizing snapshots. Each report includes a concise legend with severity categories (ERROR_MISS, WARNING_MISS, ERROR_MISCONF, WARNING_MISCONF) and automatic highlighting for missing or risky configuration.
 
 Full descriptions, use cases, highlighting meanings, and filename conventions are documented in `data_gatherer/reporting/README.md`.
 

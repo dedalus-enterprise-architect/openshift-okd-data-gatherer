@@ -5,10 +5,10 @@ This directory contains report generators for analyzing OpenShift cluster data s
 ## Available Reports
 
 ### Capacity Report (`capacity`)
-- **Purpose**: Analyze resource requests and limits across workloads
+- **Purpose**: Analyze declared CPU/memory requests & limits across controller-managed containers
 - **File**: `capacity_report.py`
-- **Output**: HTML report with resource utilization tables
-- **Focus**: CPU and memory allocation analysis for containers
+- **Output**: HTML report with resource aggregation tables + per‑namespace & cluster totals
+- **Focus**: Allocation patterns, gaps (missing values), and risk indicators (oversized limits, skewed request/limit ratios)
 
 ### Nodes Report (`nodes`)
 - **Purpose**: Display cluster node information and capacity
@@ -39,28 +39,40 @@ All reports follow consistent styling:
 
 ## Cell Formatting Rules
 
-Reports apply visual indicators based on configuration quality:
+Reports apply a unified rules engine to highlight configuration quality issues. Each cell is evaluated against the active rule set and may receive one of the severity classes below.
 
 ### Severity & Visual Encoding
 | Category | Style | Meaning |
 |----------|-------|---------|
-| ERROR_MISS | Red background | Required value missing (requests, readiness probe) |
-| WARNING_MISS | Yellow background | Recommended value missing (limits) |
-| ERROR_MISCONF | Red text | Value likely invalid or too large (limit >= smallest node) |
-| WARNING_MISCONF | Orange text | Suspicious configuration (request far below limit, image pull policy Always) |
+| ERROR_MISS | Red background (`error-miss-cell`) | Required value missing (CPU/Mem request, readiness probe) |
+| WARNING_MISS | Yellow background (`warning-miss-cell`) | Recommended value missing (CPU/Mem limit) |
+| ERROR_MISCONF | Red text (`error-misconf-cell`) | Limit >= smallest node size (likely misconfiguration) |
+| WARNING_MISCONF | Orange text (`warning-misconf-cell`) | Request ≤ 20% of limit or ImagePullPolicy=Always |
 
 ### Implemented Rules
-- Missing CPU request (ERROR_MISS)
-- Missing Memory request (ERROR_MISS)
-- Missing CPU limit (WARNING_MISS)
-- Missing Memory limit (WARNING_MISS)
-- Readiness probe missing (ERROR_MISS)
-- ImagePullPolicy = Always (WARNING_MISCONF)
-- Request <= 20% of corresponding limit (WARNING_MISCONF)
-- CPU/Memory limit >= smallest node capacity (ERROR_MISCONF)
+Current rules (see `rules/official_rules.py`):
+1. Missing CPU request (ERROR_MISS)
+2. Missing Memory request (ERROR_MISS)
+3. Missing CPU limit (WARNING_MISS)
+4. Missing Memory limit (WARNING_MISS)
+5. Readiness probe missing / not configured (ERROR_MISS)
+6. ImagePullPolicy set to Always (WARNING_MISCONF)
+7. CPU or Memory request ≤ 20% of its corresponding limit (WARNING_MISCONF)
+8. CPU limit ≥ smallest node CPU OR Memory limit ≥ smallest node Memory (ERROR_MISCONF)
 
 ### Rule Implementation
-Rules are defined in `rules/official_rules.py` and applied through the rules engine (`rules/engine.py`). Each rule specifies condition logic, severity category, and message.
+Rules are defined in `rules/official_rules.py` and dispatched through the rules engine (`rules/engine.py`). The renderer (`common.format_cell_with_condition`) applies the CSS class corresponding to the highest severity rule triggered for that cell.
+
+### Structural Row Styling
+Some rows convey aggregation or context rather than individual container data and have neutral background styling:
+| Row Class | Meaning |
+|-----------|---------|
+| totals-row-main | Totals (main containers) |
+| totals-row-all | Totals (all containers incl. init) |
+| totals-row-overhead | Init container overhead delta |
+| ns-totals | Per-namespace aggregated totals |
+
+These classes appear in the legend under "Structural Rows" for orientation only; they do not imply a severity.
 
 ## Usage
 

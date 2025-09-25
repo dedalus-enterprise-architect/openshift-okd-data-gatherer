@@ -26,7 +26,6 @@ class CapacityReport(ReportGenerator):
         main_cpu_total = main_mem_total = all_cpu_total = all_mem_total = 0
         main_cpu_lim_raw = main_mem_lim_raw = all_cpu_lim_raw = all_mem_lim_raw = 0
         main_cpu_lim_total = main_mem_lim_total = all_cpu_lim_total = all_mem_lim_total = 0
-        missing_req_any = False
         for rec in rows:
             kind = rec['kind']
             namespace = rec['namespace']
@@ -90,29 +89,34 @@ class CapacityReport(ReportGenerator):
                     '' if isinstance(mem_req_total, str) else mem_req_total,
                     '' if isinstance(mem_lim_total, str) else mem_lim_total,
                 ]
-                classes = [''] * 14
-                if cpu_req is None:
-                    classes[6] = 'missing-req'; missing_req_any = True
-                if mem_req is None:
-                    classes[8] = 'missing-req'; missing_req_any = True
-                if cpu_lim is None:
-                    classes[7] = 'missing-lim'
-                if mem_lim is None:
-                    classes[9] = 'missing-lim'
-                table_rows.append(values + [classes])
+                # Append the row values only; legacy per-cell class markers (missing-req/missing-lim)
+                # have been replaced by the unified rules engine based formatting handled in
+                # format_cell_with_condition. Keeping data lean avoids confusion.
+                table_rows.append(values)
         title = f"Capacity aggregation report: {html.escape(cluster)}"
         parts = [f"<h1>{title}</h1>"]
-        capacity_legend_sections = [{
-            'title': 'Colors',
-            'items': [
-                {'class': 'missing-req', 'description': 'Missing requests'},
-                {'class': 'missing-lim', 'description': 'Missing limits'},
-                {'class': 'totals-row-main', 'description': 'Main totals'},
-                {'class': 'totals-row-all', 'description': 'All containers'},
-                {'class': 'totals-row-overhead', 'description': 'Init overhead'},
-                {'class': 'ns-totals', 'description': 'Namespace totals'}
-            ]
-        }]
+        # Legend now aligned with unified rules engine severities instead of legacy missing-req/missing-lim classes.
+        # We still show structural row styles (totals) in a separate section for orientation.
+        capacity_legend_sections = [
+            {
+                'title': 'Configuration Severities',
+                'items': [
+                    {'class': 'error-miss-cell', 'description': 'ERROR_MISS – Required value missing (CPU/Mem request, readiness probe)'},
+                    {'class': 'warning-miss-cell', 'description': 'WARNING_MISS – Recommended value missing (CPU/Mem limit)'},
+                    {'class': 'error-misconf-cell', 'description': 'ERROR_MISCONF – Limit >= smallest node size'},
+                    {'class': 'warning-misconf-cell', 'description': 'WARNING_MISCONF – Request <=20% of limit or ImagePullPolicy=Always'}
+                ]
+            },
+            {
+                'title': 'Structural Rows',
+                'items': [
+                    {'class': 'totals-row-main', 'description': 'Totals (main containers)'},
+                    {'class': 'totals-row-all', 'description': 'Totals (all containers incl. init)'},
+                    {'class': 'totals-row-overhead', 'description': 'Init container overhead'},
+                    {'class': 'ns-totals', 'description': 'Per-namespace aggregated totals'}
+                ]
+            }
+        ]
         parts.append(build_legend_html(capacity_legend_sections))
         parts.append("<h2>Resource Summary by Namespace</h2>")
         parts.append("<table border=1 cellpadding=4 cellspacing=0>")
@@ -224,22 +228,17 @@ class CapacityReport(ReportGenerator):
         parts.append('</table>')
         if not table_rows:
             parts.append('<p>No container workloads found for this cluster.</p>')
-        additional_styles = (
+        additional_css = (
             " .totals-row-main th { background:#dfe; }"
             " .totals-row-all th { background:#def; }"
             " .totals-row-overhead th { background:#fed; }"
-            " .missing-req { background:#fdd !important; }"
-            " .missing-lim { background:#ffd !important; }"
-            " .missing-req-total th, .missing-req-total td { background:#fbb !important; }"
             " .ns-totals th { background:#f5f5f5; }"
-            " .cluster-totals-row { background:#fafafa; }"
-            " .legend-box.missing-req { background: #fdd; }"
-            " .legend-box.missing-lim { background: #ffd; }"
             " .legend-box.totals-row-main { background: #dfe; }"
             " .legend-box.totals-row-all { background: #def; }"
             " .legend-box.totals-row-overhead { background: #fed; }"
             " .legend-box.ns-totals { background: #f5f5f5; }"
         )
-        html_doc = wrap_html_document(title, parts, additional_styles)
+        # Pass the additional CSS (structural row highlighting + legend swatches) into wrapper
+        html_doc = wrap_html_document(title, parts, additional_css)
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html_doc)
