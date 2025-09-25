@@ -4,7 +4,6 @@ metadata:
   name: data-gatherer
   labels:
     app: data-gatherer
-    purpose: workload-analysis
 rules:
 # Core workload resources - cluster-wide read access
 - apiGroups: ["apps"]
