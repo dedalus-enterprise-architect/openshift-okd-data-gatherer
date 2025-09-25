@@ -41,7 +41,7 @@ OR
 * `credentials: { host, token | username/password | cert_file/key_file, ca_file, verify_ssl }`
 
 Additional per-cluster fields:
-* `include_kinds`: list of resource kinds to collect
+* `include_kinds`: list of resource kinds to collect (add `ConfigMap` if you want Java options resolution from referenced ConfigMaps in container reports)
 * `ignore_system_namespaces`: auto-exclude system namespaces (boolean)
 * `exclude_namespaces`: additional namespace exclusions (supports wildcards)
 * `parallelism`: concurrent workers for data collection
@@ -139,7 +139,7 @@ storage:
 
 ### Cluster Options
 - `name`: Unique cluster identifier (required)
-- `include_kinds`: Resource types to collect (default: `[Deployment, StatefulSet, DaemonSet, CronJob, DeploymentConfig, Node]`)
+- `include_kinds`: Resource types to collect (default: `[Deployment, StatefulSet, DaemonSet, CronJob, DeploymentConfig, Node]`) — optionally add `ConfigMap` for enhanced JAVA_OPTS extraction
 - `ignore_system_namespaces`: Skip system namespaces (default: `true`)
 - `exclude_namespaces`: Additional namespace exclusions (supports wildcards)
 - `parallelism`: Concurrent collection workers (default: `4`)

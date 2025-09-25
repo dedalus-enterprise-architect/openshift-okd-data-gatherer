@@ -135,8 +135,10 @@ table tr:hover { background-color: #e3f2fd !important; transition: background-co
 .legend ul { margin: 8px 0; padding-left: 24px; }
 .legend li { margin: 5px 0; color: #6c757d; }
 .legend-box { display: inline-block; width: 15px; height: 15px; border: 1px solid #adb5bd; margin-right: 8px; vertical-align: middle; }
-.warning-cell { background-color: #fff3cd !important; border-color: #ffeaa7 !important; }
-.error-cell { background-color: #f8d7da !important; border-color: #f5c6cb !important; }
+.warning-miss-cell { background-color: #fff3cd !important; border-color: #ffeaa7 !important; }
+.error-miss-cell { background-color: #f8d7da !important; border-color: #f5c6cb !important; }
+.error-misconf-cell { color: #c92a2a !important; font-weight: 600; }
+.warning-misconf-cell { color: #d9480f !important; font-weight: 600; }
 """.strip()
 
 

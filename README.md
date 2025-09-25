@@ -30,7 +30,7 @@ The database always reflects the latest sync; removed objects disappear automati
 4. Run the CLI subcommands in this order for each cluster: `init` → `sync` → `report`.
 5. Open the generated HTML report(s) under `clusters/<cluster>/reports/`.
 
-### Basic Usage Example
+### Basic Usage Example (Single Cluster)
 ```bash
 # Setup
 python -m venv venv
@@ -40,32 +40,53 @@ pip install -r requirements.txt
 # Configure your cluster (edit config/config.yaml with your cluster details)
 cp config/example-config.yaml config/config.yaml
 
-# Initialize and sync data for a specific cluster
+# Initialize and sync data for one cluster
 python -m data_gatherer.run init --cluster my-cluster
 python -m data_gatherer.run sync --cluster my-cluster
 
-# Generate reports
-python -m data_gatherer.run report --cluster my-cluster --type all
+# Generate all reports for that cluster
+python -m data_gatherer.run report --cluster my-cluster --all
 
 # View the reports
 # Reports will be in: clusters/my-cluster/reports/
 ```
 
-### Common Usage Patterns
+### Multi‑Cluster Examples
 ```bash
-# Daily capacity review
+# Initialize every cluster defined in config
+python -m data_gatherer.run init --all-clusters
+
+# Sync a subset of clusters in one call
+python -m data_gatherer.run sync --cluster prod --cluster staging
+
+# Sync all clusters (parallel per kind inside each cluster)
+python -m data_gatherer.run sync --all-clusters
+
+# Generate ALL report types for all clusters
+python -m data_gatherer.run report --all-clusters --all
+
+# Generate only capacity report for two clusters
+python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
+
+# Show status for all configured clusters
+python -m data_gatherer.run status --all-clusters
+
+# List nodes (snapshot) for several clusters
+python -m data_gatherer.run nodes --cluster prod --cluster staging
+```
+
+### Additional Usage Patterns (Legacy single-cluster style)
+```bash
+# Daily capacity review (single cluster)
 python -m data_gatherer.run sync --cluster prod
 python -m data_gatherer.run report --cluster prod --type capacity
 
-# Configuration audit across all clusters (requires multiple commands)
-for cluster in prod staging; do
-  python -m data_gatherer.run sync --cluster $cluster
-  python -m data_gatherer.run report --cluster $cluster --type containers-config
-done
+# Configuration audit across multiple clusters (single command now)
+python -m data_gatherer.run report --cluster prod --cluster staging --type containers-config
 
-# Quick cluster inventory
-python -m data_gatherer.run status --cluster staging
-python -m data_gatherer.run nodes --cluster staging
+# Quick multi-cluster inventory
+python -m data_gatherer.run status --all-clusters
+python -m data_gatherer.run nodes --all-clusters
 
 # Generate specific reports only
 python -m data_gatherer.run report --cluster prod --type summary
@@ -100,55 +121,76 @@ Use the provided read‑only role for a service account. Run the helper script `
 For manual steps or permission details see `rbac/README.md`.
 
 ---
-## 6. Core Commands (Most Users Only Need These)
-Available CLI subcommands: init, sync, status, nodes, kinds, report.
+## 6. Core Commands & Options
+CLI subcommands: init, sync, status, nodes, kinds, report.
 
-### Global Options
-- `--config PATH` - Custom configuration file path (default: config/config.yaml)
-- `--help` - Show help message and exit
+### Global
+- `--config PATH` (all commands) – Config file (default `config/config.yaml`)
 
-### Command Details
+### Multi-Cluster Conventions
+- `--cluster NAME` may be repeated (order preserved)
+- `--all-clusters` selects every configured cluster (mutually additive with individual flags only in sense you can just use this alone)
 
-#### `init` - Initialize cluster data directories
+### `init`
+Initialize storage (creates `clusters/<name>/data.db`).
 ```bash
-python -m data_gatherer.run init --cluster CLUSTER
+python -m data_gatherer.run init --cluster prod
+python -m data_gatherer.run init --all-clusters
 ```
-- `--cluster CLUSTER` - Target cluster name (required)
 
-#### `sync` - Sync workload data from clusters
+### `sync`
+Fetch current manifests + nodes (snapshot overwrite).
 ```bash
-python -m data_gatherer.run sync --cluster CLUSTER [--kinds KIND1,KIND2,...]
+python -m data_gatherer.run sync --cluster prod
+python -m data_gatherer.run sync --cluster prod --cluster staging
+python -m data_gatherer.run sync --all-clusters
+python -m data_gatherer.run sync --cluster prod --kind Deployment --kind Node
 ```
-- `--cluster CLUSTER` - Target cluster name (required)
-- `--kinds KIND1,KIND2,...` - Override included resource kinds for this sync
+Options:
+- `--kind KIND` (repeatable) – Limit to subset instead of configured `include_kinds`.
 
-#### `status` - Show cluster sync status
+### `status`
+Show summary counts per cluster.
 ```bash
-python -m data_gatherer.run status --cluster CLUSTER
+python -m data_gatherer.run status --cluster prod
+python -m data_gatherer.run status --all-clusters
 ```
-- `--cluster CLUSTER` - Target cluster name (required)
 
-#### `nodes` - Display node information
+### `nodes`
+List node capacity snapshot (JSON output).
 ```bash
-python -m data_gatherer.run nodes --cluster CLUSTER [--format FORMAT]
+python -m data_gatherer.run nodes --cluster prod
+python -m data_gatherer.run nodes --all-clusters
 ```
-- `--cluster CLUSTER` - Target cluster name (required)
-- `--format FORMAT` - Output format: json, table (default: table)
 
-#### `kinds` - List supported resource kinds
+### `kinds`
+List supported kinds & API group.
 ```bash
 python -m data_gatherer.run kinds
 ```
 
-#### `report` - Generate HTML reports
+### `report`
+Generate HTML reports per cluster.
 ```bash
-python -m data_gatherer.run report --cluster CLUSTER [--type TYPE] [--output-dir DIR]
-```
-- `--cluster CLUSTER` - Target cluster name (required)
-- `--type TYPE` - Report type: summary, capacity, nodes, containers-config, all (default: all)
-- `--output-dir DIR` - Custom output directory (default: clusters/<cluster>/reports/)
+# Single cluster, one report
+python -m data_gatherer.run report --cluster prod --type capacity
 
-Typical flow per cluster: init → sync (optionally with repeated sync runs) → report (one or all types).
+# Single cluster, every report type
+python -m data_gatherer.run report --cluster prod --all
+
+# Multi-cluster, capacity only
+python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
+
+# All clusters, all report types
+python -m data_gatherer.run report --all-clusters --all
+```
+Options:
+- `--type NAME` – One of: summary, capacity, nodes, containers-config (default: summary)
+- `--all` – Generate every available type (ignores `--type`)
+- `--out PATH` – Explicit file path (single-cluster only)
+- `--list-types` – Show available report types then exit
+
+Typical flow: `init --all-clusters` → periodic `sync --all-clusters` → `report --all-clusters --all` when you need fresh HTML.
 
 ---
 ## 7. Reports Overview (Summary Only)

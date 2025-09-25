@@ -98,11 +98,11 @@ def test_capacity_report_css_classes(tmp_path):
 
     # Check for new warning/error cell classes instead of old missing-req/missing-lim
     # Should have error cells for missing resource requests/limits
-    assert 'class="error-cell"' in content, 'error-cell class not found - missing resource values should trigger error formatting'
+    assert 'class="error-miss-cell"' in content, 'error-miss-cell class not found - missing resource values should trigger error formatting'
     
     # Check that CSS for warning/error cells is present
-    assert '.warning-cell' in content, 'warning-cell CSS class not found in styles'
-    assert '.error-cell' in content, 'error-cell CSS class not found in styles'
+    assert '.warning-miss-cell' in content, 'warning-miss-cell CSS class not found in styles'
+    assert '.error-miss-cell' in content, 'error-miss-cell CSS class not found in styles'
     
     # Verify background colors are applied
     assert 'background-color: #fff3cd' in content, 'warning cell background color not found'

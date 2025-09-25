@@ -27,7 +27,8 @@ class RulesEngine:
                 rule_result = rule.evaluate(context)
                 if rule_result and self._is_higher_severity(rule_result.rule_type, highest_result.rule_type):
                     highest_result = rule_result
-                    if rule_result.rule_type == RuleType.ERROR:
+                    # Early exit if we hit top severity (any ERROR category)
+                    if rule_result.rule_type in (RuleType.ERROR_MISS, RuleType.ERROR_MISCONF):
                         break
             except Exception as e:  # pragma: no cover
                 print(f"Warning: Rule '{rule.name}' failed to evaluate: {e}")
@@ -58,5 +59,13 @@ class RulesEngine:
         return '|'.join(key_parts)
 
     def _is_higher_severity(self, new_type: RuleType, current_type: RuleType) -> bool:
-        severity_order = {RuleType.NONE: 0, RuleType.INFO: 1, RuleType.WARNING: 2, RuleType.ERROR: 3}
-        return severity_order[new_type] > severity_order[current_type]
+        # Define ordering across new categories
+        severity_order = {
+            RuleType.NONE: 0,
+            RuleType.INFO: 1,
+            RuleType.WARNING_MISS: 2,
+            RuleType.WARNING_MISCONF: 3,
+            RuleType.ERROR_MISS: 4,
+            RuleType.ERROR_MISCONF: 5,
+        }
+        return severity_order.get(new_type, 0) > severity_order.get(current_type, 0)

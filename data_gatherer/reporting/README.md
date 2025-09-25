@@ -41,30 +41,47 @@ All reports follow consistent styling:
 
 Reports apply visual indicators based on configuration quality:
 
-### ERROR Conditions (Red highlighting)
-- Missing value for CPU requests
-- Missing value for Memory requests
-- Missing ReadinessProbe
+### Severity & Visual Encoding
+| Category | Style | Meaning |
+|----------|-------|---------|
+| ERROR_MISS | Red background | Required value missing (requests, readiness probe) |
+| WARNING_MISS | Yellow background | Recommended value missing (limits) |
+| ERROR_MISCONF | Red text | Value likely invalid or too large (limit >= smallest node) |
+| WARNING_MISCONF | Orange text | Suspicious configuration (request far below limit, image pull policy Always) |
 
-### WARNING Conditions (Yellow highlighting)
-- Missing value for CPU limits
-- Missing value for Memory limits
-- ImagePullPolicy set to Always
+### Implemented Rules
+- Missing CPU request (ERROR_MISS)
+- Missing Memory request (ERROR_MISS)
+- Missing CPU limit (WARNING_MISS)
+- Missing Memory limit (WARNING_MISS)
+- Readiness probe missing (ERROR_MISS)
+- ImagePullPolicy = Always (WARNING_MISCONF)
+- Request <= 20% of corresponding limit (WARNING_MISCONF)
+- CPU/Memory limit >= smallest node capacity (ERROR_MISCONF)
 
 ### Rule Implementation
-Rules are defined in `rules/official_rules.py` and applied through the rules engine (`rules/engine.py`). Each rule specifies:
-- Condition logic
-- Severity level (ERROR/WARNING)
-- Descriptive message
+Rules are defined in `rules/official_rules.py` and applied through the rules engine (`rules/engine.py`). Each rule specifies condition logic, severity category, and message.
 
 ## Usage
 
-Reports are generated using the main data gatherer CLI:
+Reports are generated via the main CLI `report` subcommand. You can target one or many clusters.
 
 ```bash
-# Generate all reports for a cluster
-python -m data_gatherer.run --cluster my-cluster --report-types capacity,nodes,summary,containers-config
+# List available report types
+python -m data_gatherer.run report --list-types
 
-# Generate specific report
-python -m data_gatherer.run --cluster my-cluster --report-types capacity
+# Single cluster: generate every report type
+python -m data_gatherer.run report --cluster my-cluster --all
+
+# Single cluster: only capacity report
+python -m data_gatherer.run report --cluster my-cluster --type capacity
+
+# Two clusters: capacity report each
+python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
+
+# All configured clusters: all report types
+python -m data_gatherer.run report --all-clusters --all
+
+# Explicit output path (single cluster only)
+python -m data_gatherer.run report --cluster prod --type summary --out /tmp/prod-summary.html
 ```

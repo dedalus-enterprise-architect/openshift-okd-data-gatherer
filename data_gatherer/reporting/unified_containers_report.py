@@ -48,7 +48,7 @@ class ContainerConfigurationReport(ReportGenerator):
                 mem_lim = mem_to_mi(limits.get('memory'))
                 readiness_probe = self._extract_readiness_probe_timeout(cdef)
                 image_pull_policy = cdef.get('imagePullPolicy', 'IfNotPresent')
-                java_opts = self._extract_java_opts(cdef)
+                java_opts = self._extract_java_opts(cdef, namespace, db)
                 row = [
                     kind,
                     namespace,
@@ -85,7 +85,8 @@ class ContainerConfigurationReport(ReportGenerator):
             return f"{timeout}s (initial: {initial_delay}s)"
         return "Not configured"
 
-    def _extract_java_opts(self, container_def):
+    def _extract_java_opts(self, container_def, namespace: str, db: WorkloadDB):
+        # Direct env value first
         env = container_def.get('env', [])
         for env_var in env:
             var_name = env_var.get('name', '').upper()
@@ -93,7 +94,67 @@ class ContainerConfigurationReport(ReportGenerator):
                 value = env_var.get('value', '')
                 if value:
                     return value
+        # valueFrom -> configMapKeyRef
+        for env_var in env:
+            value_from = env_var.get('valueFrom', {})
+            cm_ref = value_from.get('configMapKeyRef') if isinstance(value_from, dict) else None
+            if not cm_ref:
+                continue
+            key_name = env_var.get('name', '').upper()
+            if 'JAVA' in key_name and 'OPT' in key_name:
+                cm_name = cm_ref.get('name')
+                cm_key = cm_ref.get('key')
+                val = self._lookup_configmap_value(db, namespace, cm_name, cm_key)
+                if val:
+                    return val
+        # envFrom configMapRef entire data scan for likely JAVA options
+        for env_from in container_def.get('envFrom', []) or []:
+            cm_ref = env_from.get('configMapRef') if isinstance(env_from, dict) else None
+            if not cm_ref:
+                continue
+            cm_name = cm_ref.get('name')
+            data = self._lookup_configmap_data(db, namespace, cm_name)
+            if data:
+                # look for keys containing JAVA_OPTS or similar
+                for k, v in data.items():
+                    ku = k.upper()
+                    if 'JAVA' in ku and 'OPT' in ku and v:
+                        return v
         return "Not configured"
+
+    def _lookup_configmap_value(self, db: WorkloadDB, namespace: str, name: str, key: str):
+        if not (name and key):
+            return None
+        cur = db._conn.cursor()
+        row = cur.execute(
+            "SELECT manifest_json FROM workload WHERE kind=? AND namespace=? AND name=? LIMIT 1",
+            ('ConfigMap', namespace, name)
+        ).fetchone()
+        if not row:
+            return None
+        import json
+        try:
+            manifest = json.loads(row[0])
+            return (manifest.get('data') or {}).get(key)
+        except Exception:
+            return None
+
+    def _lookup_configmap_data(self, db: WorkloadDB, namespace: str, name: str):
+        if not name:
+            return None
+        cur = db._conn.cursor()
+        row = cur.execute(
+            "SELECT manifest_json FROM workload WHERE kind=? AND namespace=? AND name=? LIMIT 1",
+            ('ConfigMap', namespace, name)
+        ).fetchone()
+        if not row:
+            return None
+        import json
+        try:
+            manifest = json.loads(row[0])
+            return manifest.get('data') or {}
+        except Exception:
+            return None
 
     def _format_labels(self, labels_dict):
         if not labels_dict:

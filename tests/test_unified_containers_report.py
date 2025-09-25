@@ -229,7 +229,10 @@ def test_unified_containers_report_helper_methods():
             {"name": "OTHER_VAR", "value": "other"}
         ]
     }
-    java_result = report._extract_java_opts(container_with_java)
+    # Create mock db and namespace for the method call
+    from unittest.mock import Mock
+    mock_db = Mock()
+    java_result = report._extract_java_opts(container_with_java, "test-namespace", mock_db)
     assert java_result == "-Xmx512m"
     
     container_without_java = {
@@ -237,7 +240,7 @@ def test_unified_containers_report_helper_methods():
             {"name": "OTHER_VAR", "value": "other"}
         ]
     }
-    java_result = report._extract_java_opts(container_without_java)
+    java_result = report._extract_java_opts(container_without_java, "test-namespace", mock_db)
     assert java_result == "Not configured"
     
     # Test labels formatting
