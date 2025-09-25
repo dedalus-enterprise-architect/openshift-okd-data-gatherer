@@ -30,6 +30,47 @@ The database always reflects the latest sync; removed objects disappear automati
 4. Run the CLI subcommands in this order for each cluster: `init` → `sync` → `report`.
 5. Open the generated HTML report(s) under `clusters/<cluster>/reports/`.
 
+### Basic Usage Example
+```bash
+# Setup
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Configure your cluster (edit config/config.yaml with your cluster details)
+cp config/example-config.yaml config/config.yaml
+
+# Initialize and sync data for a specific cluster
+python -m data_gatherer.run init --cluster my-cluster
+python -m data_gatherer.run sync --cluster my-cluster
+
+# Generate reports
+python -m data_gatherer.run report --cluster my-cluster --type all
+
+# View the reports
+# Reports will be in: clusters/my-cluster/reports/
+```
+
+### Common Usage Patterns
+```bash
+# Daily capacity review
+python -m data_gatherer.run sync --cluster prod
+python -m data_gatherer.run report --cluster prod --type capacity
+
+# Configuration audit across all clusters (requires multiple commands)
+for cluster in prod staging; do
+  python -m data_gatherer.run sync --cluster $cluster
+  python -m data_gatherer.run report --cluster $cluster --type containers-config
+done
+
+# Quick cluster inventory
+python -m data_gatherer.run status --cluster staging
+python -m data_gatherer.run nodes --cluster staging
+
+# Generate specific reports only
+python -m data_gatherer.run report --cluster prod --type summary
+python -m data_gatherer.run report --cluster prod --type nodes
+```
 
 ---
 ## 4. Configuration Essentials
@@ -45,21 +86,12 @@ Create `config/config.yaml`. Each cluster entry chooses ONE authentication metho
 * include_kinds – only collect what you need (include `Node` for node sizing)
 * ignore_system_namespaces – auto‑skip common system namespaces
 * exclude_namespaces – add exact names or wildcards like `sandbox-*`
-* parallelism – adjust concurrency (API friendly default 4)
+* parallelism – adjust concurrency (API friendly default `4`)
 * write_manifest_files – set to false if you only want the DB + reports
 
 Supported kinds (may safely subset): Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, BuildConfig, Node.
 
-See `example-config.yaml` for a concrete template covering kubeconfig and token-based authentication patterns; adapt it rather than copying snippets from this document.
-
-Key fields:
-* include_kinds – only collect what you need (include `Node` for node sizing)
-* ignore_system_namespaces – auto‑skip common system namespaces
-* exclude_namespaces – add exact names or wildcards like `sandbox-*`
-* parallelism – adjust concurrency (API friendly default 4)
-* write_manifest_files – set to false if you only want the DB + reports
-
-Supported kinds (may safely subset): Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, BuildConfig, Node.
+See `config/example-config.yaml` for a concrete template covering kubeconfig and token-based authentication patterns; adapt it rather than copying snippets from this document.
 
 ---
 ## 5. RBAC (One-Time Cluster Prep)
@@ -71,7 +103,52 @@ For manual steps or permission details see `rbac/README.md`.
 ## 6. Core Commands (Most Users Only Need These)
 Available CLI subcommands: init, sync, status, nodes, kinds, report.
 
-Typical flow per cluster: init → sync (optionally with repeated sync runs) → report (one or all types). Use `kinds` to review supported workload kinds and `status` or `nodes` for JSON summaries. Pass a custom configuration path with the global `--config` option if the default location is not used.
+### Global Options
+- `--config PATH` - Custom configuration file path (default: config/config.yaml)
+- `--help` - Show help message and exit
+
+### Command Details
+
+#### `init` - Initialize cluster data directories
+```bash
+python -m data_gatherer.run init --cluster CLUSTER
+```
+- `--cluster CLUSTER` - Target cluster name (required)
+
+#### `sync` - Sync workload data from clusters
+```bash
+python -m data_gatherer.run sync --cluster CLUSTER [--kinds KIND1,KIND2,...]
+```
+- `--cluster CLUSTER` - Target cluster name (required)
+- `--kinds KIND1,KIND2,...` - Override included resource kinds for this sync
+
+#### `status` - Show cluster sync status
+```bash
+python -m data_gatherer.run status --cluster CLUSTER
+```
+- `--cluster CLUSTER` - Target cluster name (required)
+
+#### `nodes` - Display node information
+```bash
+python -m data_gatherer.run nodes --cluster CLUSTER [--format FORMAT]
+```
+- `--cluster CLUSTER` - Target cluster name (required)
+- `--format FORMAT` - Output format: json, table (default: table)
+
+#### `kinds` - List supported resource kinds
+```bash
+python -m data_gatherer.run kinds
+```
+
+#### `report` - Generate HTML reports
+```bash
+python -m data_gatherer.run report --cluster CLUSTER [--type TYPE] [--output-dir DIR]
+```
+- `--cluster CLUSTER` - Target cluster name (required)
+- `--type TYPE` - Report type: summary, capacity, nodes, containers-config, all (default: all)
+- `--output-dir DIR` - Custom output directory (default: clusters/<cluster>/reports/)
+
+Typical flow per cluster: init → sync (optionally with repeated sync runs) → report (one or all types).
 
 ---
 ## 7. Reports Overview (Summary Only)
