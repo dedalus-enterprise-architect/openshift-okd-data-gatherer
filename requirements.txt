@@ -1,4 +1,4 @@
-kubernetes>=28.1.0,<29.0.0
-PyYAML>=6.0.0,<7.0.0
-rich>=13.7.0,<14.0.0
-click>=8.1.7,<9.0.0
+click==8.1.7
+kubernetes==28.1.0
+PyYAML==6.0.3
+urllib3==1.26.20
