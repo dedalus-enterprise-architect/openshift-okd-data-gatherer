@@ -3,7 +3,7 @@ import html
 from typing import Dict, List, Tuple, Optional
 from .base import ReportGenerator, register
 from ..persistence.db import WorkloadDB
-from .common import wrap_html_document, format_cell_with_condition
+from .common import wrap_html_document, format_cell_with_condition, build_legend_html
 
 
 def _parse_resource_value(value: Optional[str]) -> Optional[float]:
@@ -64,38 +64,36 @@ class NodesReport(ReportGenerator):
         role_groups = self._group_nodes_by_role(nodes)
         title = f"Nodes resource report: {html.escape(cluster)}"
         parts = [f"<h1>{title}</h1>"]
-        parts.append("""
-        <div class="legend">
-            <h3>Legend</h3>
-            <div class="legend-section">
-                <h4>Summary Table Columns</h4>
-                <ul>
-                    <li><strong>Role</strong>: Node role grouping</li>
-                    <li><strong>Count</strong>: Number of nodes with that role</li>
-                    <li><strong>CPU Capacity (cores)</strong>: Sum of core capacity</li>
-                    <li><strong>CPU Allocatable (cores)</strong>: Sum cores allocatable to pods</li>
-                    <li><strong>Memory Capacity (GiB)</strong>: Sum memory capacity</li>
-                    <li><strong>Memory Allocatable (GiB)</strong>: Sum memory allocatable to pods</li>
-                    <li><strong>CPU Efficiency</strong>: Allocatable / Capacity * 100</li>
-                    <li><strong>Memory Efficiency</strong>: Allocatable / Capacity * 100</li>
-                </ul>
-            </div>
-            <div class="legend-section">
-                <h4>Per-Role Table Columns</h4>
-                <ul>
-                    <li><strong>Node Name</strong>: Kubernetes node name</li>
-                    <li><strong>Instance Type</strong>: Cloud instance type (or unknown)</li>
-                    <li><strong>Zone</strong>: Availability zone (or unknown)</li>
-                    <li><strong>CPU Cap (m)</strong>: CPU capacity in millicores</li>
-                    <li><strong>CPU Alloc (m)</strong>: CPU allocatable in millicores</li>
-                    <li><strong>Mem Cap (Mi)</strong>: Memory capacity in MiB</li>
-                    <li><strong>Mem Alloc (Mi)</strong>: Memory allocatable in MiB</li>
-                    <li><strong>CPU Util %</strong>: Allocatable / Capacity * 100</li>
-                    <li><strong>Mem Util %</strong>: Allocatable / Capacity * 100</li>
-                </ul>
-            </div>
-        </div>
-        """)
+        legend_sections = [
+            {
+                'title': 'Summary Table Columns',
+                'items': [
+                    'Role: Node role grouping',
+                    'Count: Number of nodes with that role',
+                    'CPU Capacity (cores): Sum of core capacity',
+                    'CPU Allocatable (cores): Sum cores allocatable to pods',
+                    'Memory Capacity (GiB): Sum memory capacity',
+                    'Memory Allocatable (GiB): Sum memory allocatable to pods',
+                    'CPU Efficiency: Allocatable / Capacity * 100',
+                    'Memory Efficiency: Allocatable / Capacity * 100'
+                ]
+            },
+            {
+                'title': 'Per-Role Table Columns',
+                'items': [
+                    'Node Name: Kubernetes node name',
+                    'Instance Type: Cloud instance type (or unknown)',
+                    'Zone: Availability zone (or unknown)',
+                    'CPU Cap (m): CPU capacity in millicores',
+                    'CPU Alloc (m): CPU allocatable in millicores',
+                    'Mem Cap (Mi): Memory capacity in MiB',
+                    'Mem Alloc (Mi): Memory allocatable in MiB',
+                    'CPU Util %: Allocatable / Capacity * 100',
+                    'Mem Util %: Allocatable / Capacity * 100'
+                ]
+            }
+        ]
+        parts.append(build_legend_html(legend_sections))
         parts.extend(self._generate_summary_section(role_groups))
         for role in sorted(role_groups.keys()):
             parts.extend(self._generate_role_section(role, role_groups[role]))
