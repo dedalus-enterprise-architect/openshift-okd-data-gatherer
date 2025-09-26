@@ -25,42 +25,45 @@ class SummaryReport(ReportGenerator):
         ).fetchall()
         title = f"Cluster report: {html.escape(cluster)}"
         parts = [f"<h1>{title}</h1>"]
-        parts.append("""
-        <div class="legend">
-            <h3>Legend</h3>
-            <div class="legend-section">
-                <h4>Summary Items</h4>
-                <ul>
-                    <li><strong>Total workloads</strong>: Count of all rows in snapshot</li>
-                    <li><strong>Active workloads</strong>: Same as total (snapshot only, non-deleted)</li>
-                </ul>
-            </div>
-            <div class="legend-section">
-                <h4>By Kind Table Columns</h4>
-                <ul>
-                    <li><strong>Kind</strong>: Workload controller kind</li>
-                    <li><strong>Count</strong>: Number of workloads of that kind</li>
-                </ul>
-            </div>
-            <div class="legend-section">
-                <h4>Nodes Table Columns</h4>
-                <ul>
-                    <li><strong>Name</strong>: Node name</li>
-                    <li><strong>Role</strong>: master / infra / worker (or other)</li>
-                    <li><strong>Instance</strong>: Instance type</li>
-                    <li><strong>Zone</strong>: Availability zone / failure domain</li>
-                    <li><strong>CPU</strong>: Node CPU capacity (raw value)</li>
-                    <li><strong>Memory</strong>: Node Memory capacity (raw value)</li>
-                </ul>
-            </div>
-            <div class="legend-section">
-                <h4>Workloads (Namespace Section)</h4>
-                <ul>
-                    <li><strong>details blocks</strong>: Expand to view full manifest JSON per workload</li>
-                </ul>
-            </div>
-        </div>
-        """)
+        legend_html = (
+            '<details class="legend">'
+            '<summary>Legend</summary>'
+            '<div class="legend-body">'
+            '<div class="legend-section">'
+            '<h4>Summary Items</h4>'
+            '<ul>'
+            '<li><strong>Total workloads</strong>: Count of all rows in snapshot</li>'
+            '<li><strong>Active workloads</strong>: Same as total (snapshot only, non-deleted)</li>'
+            '</ul>'
+            '</div>'
+            '<div class="legend-section">'
+            '<h4>By Kind Table Columns</h4>'
+            '<ul>'
+            '<li><strong>Kind</strong>: Workload controller kind</li>'
+            '<li><strong>Count</strong>: Number of workloads of that kind</li>'
+            '</ul>'
+            '</div>'
+            '<div class="legend-section">'
+            '<h4>Nodes Table Columns</h4>'
+            '<ul>'
+            '<li><strong>Name</strong>: Node name</li>'
+            '<li><strong>Role</strong>: master / infra / worker (or other)</li>'
+            '<li><strong>Instance</strong>: Instance type</li>'
+            '<li><strong>Zone</strong>: Availability zone / failure domain</li>'
+            '<li><strong>CPU</strong>: Node CPU capacity (raw value)</li>'
+            '<li><strong>Memory</strong>: Node Memory capacity (raw value)</li>'
+            '</ul>'
+            '</div>'
+            '<div class="legend-section">'
+            '<h4>Workloads (Namespace Section)</h4>'
+            '<ul>'
+            '<li><strong>details blocks</strong>: Expand to view full manifest JSON per workload</li>'
+            '</ul>'
+            '</div>'
+            '</div>'
+            '</details>'
+        )
+        parts.append(legend_html)
         parts.append("<h2>Summary</h2>")
         parts.append("<ul>")
         parts.append(f"<li>Total workloads: {summary.get('total', 0)}</li>")
