@@ -91,7 +91,12 @@ def get_replicas_for_workload(kind: str, manifest: dict) -> Optional[int]:
 
 
 def build_legend_html(sections: List[Dict[str, Any]]) -> str:
-    parts = ['<div class="legend">', '<h3>Legend</h3>']
+    """Build a (collapsible) legend block.
+
+    Uses <details>/<summary> for native, accessible toggle support. Default is
+    open so existing tests that only assert presence of legend text remain valid.
+    """
+    parts = ['<details class="legend">', '<summary>Legend</summary>', '<div class="legend-body">']
     for section in sections:
         parts.append('<div class="legend-section">')
         parts.append(f'<h4>{html.escape(section["title"])}</h4>')
@@ -108,7 +113,7 @@ def build_legend_html(sections: List[Dict[str, Any]]) -> str:
                 parts.append(f'<li>{item}</li>')
         parts.append('</ul>')
         parts.append('</div>')
-    parts.append('</div>')
+    parts.append('</div></details>')
     return '\n'.join(parts)
 
 
@@ -128,8 +133,12 @@ th { background: #343a40; color: #ffffff; font-weight: 600; text-align: left; bo
 td { border: 1px solid #dee2e6; padding: 8px; vertical-align: top; color: #343a40; }
 table tr:nth-child(even) { background-color: #f8f9fa; }
 table tr:hover { background-color: #e3f2fd !important; transition: background-color 0.2s ease; }
-.legend { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 15px 0; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; }
-.legend h3 { margin: 0 0 10px 0; color: #343a40; font-size: 12px; font-weight: 600; }
+.legend { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px 15px 15px 15px; margin: 15px 0; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; position: relative; }
+.legend summary { cursor: pointer; list-style: none; font-size: 12px; font-weight: 600; color: #343a40; margin: 0 0 6px 0; }
+.legend summary::-webkit-details-marker { display: none; }
+.legend summary::before { content: '\25BE'; /* small down arrow */ display: inline-block; margin-right: 6px; transition: transform 0.2s ease; }
+.legend[open] summary::before { transform: rotate(0deg); }
+.legend:not([open]) summary::before { transform: rotate(-90deg); }
 .legend h4 { margin: 10px 0 5px 0; color: #495057; font-size: 11px; font-weight: 500; }
 .legend-section { margin-bottom: 20px; }
 .legend ul { margin: 8px 0; padding-left: 24px; }

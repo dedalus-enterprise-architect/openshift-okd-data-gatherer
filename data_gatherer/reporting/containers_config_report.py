@@ -174,7 +174,7 @@ class ContainerConfigurationReport(ReportGenerator):
         # Comprehensive column legend: every table header must be represented here
         legend_sections = get_common_legend_sections() + [
             {
-                "title": "Columns",
+                "title": "Key Columns",
                 "items": [
                     "<strong>Kind</strong>: Workload controller kind (Deployment / StatefulSet / etc.)",
                     "<strong>Namespace</strong>: Kubernetes namespace (blank if cluster‑scoped)",
