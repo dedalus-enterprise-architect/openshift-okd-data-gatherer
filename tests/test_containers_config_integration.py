@@ -7,11 +7,11 @@ import pytest
 import os
 from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.cluster.context import get_cluster_paths, open_cluster_db
-from data_gatherer.reporting.unified_containers_report import ContainerConfigurationReport
+from data_gatherer.reporting.containers_config_report import ContainerConfigurationReport
 from data_gatherer.config import load_config
 
 
-def test_unified_containers_report_real_data_integration():
+def test_containers_config_report_real_data_integration():
     """Test unified containers report with real cluster data to verify it's not empty and contains expected data."""
     config_path = 'config/config.yaml'
     if not os.path.exists(config_path):
@@ -39,7 +39,7 @@ def test_unified_containers_report_real_data_integration():
     
     # Generate unified containers report
     report = ContainerConfigurationReport()
-    output_path = f"/tmp/test_unified_containers_{cluster_name}.html"
+    output_path = f"/tmp/test_containers_config_{cluster_name}.html"
     
     try:
         report.generate(db, cluster_name, output_path)

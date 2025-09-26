@@ -6,7 +6,7 @@ import tempfile
 import os
 import json
 from data_gatherer.persistence.db import WorkloadDB
-from data_gatherer.reporting.unified_containers_report import ContainerConfigurationReport
+from data_gatherer.reporting.containers_config_report import ContainerConfigurationReport
 
 def test_java_opts_configmap_scanning():
     """Test that Java options are correctly extracted from ConfigMaps."""

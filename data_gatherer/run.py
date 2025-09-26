@@ -197,7 +197,7 @@ def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
     from datetime import datetime
     from .reporting.base import get_report_types, get_generator
     from .reporting import summary_report  # noqa: F401
-    from .reporting import unified_containers_report  # noqa: F401
+    from .reporting import containers_config_report  # noqa: F401
     from .reporting import nodes_report  # noqa: F401
     from .reporting import capacity_report  # noqa: F401
     if list_types:

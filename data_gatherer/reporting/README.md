@@ -24,7 +24,7 @@ This directory contains report generators for analyzing OpenShift cluster data s
 
 ### Container Configuration Report (`containers-config`)
 - **Purpose**: Detailed container configuration analysis
-- **File**: `unified_containers_report.py`
+- **File**: `containers_config_report.py`
 - **Output**: HTML report with container settings and best practices
 - **Focus**: Configuration compliance and optimization recommendations
 

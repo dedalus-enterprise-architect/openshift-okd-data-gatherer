@@ -3,13 +3,13 @@ Tests for unified containers report functionality.
 """
 
 import pytest
-from data_gatherer.reporting.unified_containers_report import ContainerConfigurationReport
+from data_gatherer.reporting.containers_config_report import ContainerConfigurationReport
 from data_gatherer.persistence.db import WorkloadDB
 import tempfile
 import os
 
 
-def test_unified_containers_report_generation(tmp_path):
+def test_containers_config_report_generation(tmp_path):
     """Test that unified containers report generates correctly with real data."""
     # Create temporary database
     db_path = tmp_path / "test.db"
@@ -164,7 +164,7 @@ def test_unified_containers_report_generation(tmp_path):
     assert "Container Types" in content
 
 
-def test_unified_containers_report_empty_data(tmp_path):
+def test_containers_config_report_empty_data(tmp_path):
     """Test unified containers report with no data."""
     # Create empty database
     db_path = tmp_path / "empty.db"
@@ -188,7 +188,7 @@ def test_unified_containers_report_empty_data(tmp_path):
     assert "No container workloads found" in content
 
 
-def test_unified_containers_report_registration():
+def test_containers_config_report_registration():
     """Test that unified containers report is properly registered."""
     from data_gatherer.reporting.base import get_report_types, get_generator
     
@@ -204,7 +204,7 @@ def test_unified_containers_report_registration():
     assert generator.filename_prefix == "containers-config-"
 
 
-def test_unified_containers_report_helper_methods():
+def test_containers_config_report_helper_methods():
     """Test unified containers report helper methods."""
     report = ContainerConfigurationReport()
     

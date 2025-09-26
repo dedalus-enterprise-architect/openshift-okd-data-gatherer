@@ -1,4 +1,3 @@
-"""Unified Containers Report combining resource and diagnostic data."""
 from __future__ import annotations
 from .base import ReportGenerator, register
 from ..persistence.db import WorkloadDB
