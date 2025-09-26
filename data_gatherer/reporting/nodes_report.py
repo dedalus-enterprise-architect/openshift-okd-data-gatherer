@@ -68,19 +68,30 @@ class NodesReport(ReportGenerator):
         <div class="legend">
             <h3>Legend</h3>
             <div class="legend-section">
-                <h4>Roles</h4>
+                <h4>Summary Table Columns</h4>
                 <ul>
-                    <li><strong>master</strong>: Control plane</li>
-                    <li><strong>infra</strong>: Infrastructure</li>  
-                    <li><strong>worker</strong>: Application nodes</li>
+                    <li><strong>Role</strong>: Node role grouping</li>
+                    <li><strong>Count</strong>: Number of nodes with that role</li>
+                    <li><strong>CPU Capacity (cores)</strong>: Sum of core capacity</li>
+                    <li><strong>CPU Allocatable (cores)</strong>: Sum cores allocatable to pods</li>
+                    <li><strong>Memory Capacity (GiB)</strong>: Sum memory capacity</li>
+                    <li><strong>Memory Allocatable (GiB)</strong>: Sum memory allocatable to pods</li>
+                    <li><strong>CPU Efficiency</strong>: Allocatable / Capacity * 100</li>
+                    <li><strong>Memory Efficiency</strong>: Allocatable / Capacity * 100</li>
                 </ul>
             </div>
             <div class="legend-section">
-                <h4>Resources</h4>
+                <h4>Per-Role Table Columns</h4>
                 <ul>
-                    <li><strong>Capacity</strong>: Total node resources</li>
-                    <li><strong>Allocatable</strong>: Available for pods</li>
-                    <li><strong>Efficiency %</strong>: Allocatable/Capacity ratio</li>
+                    <li><strong>Node Name</strong>: Kubernetes node name</li>
+                    <li><strong>Instance Type</strong>: Cloud instance type (or unknown)</li>
+                    <li><strong>Zone</strong>: Availability zone (or unknown)</li>
+                    <li><strong>CPU Cap (m)</strong>: CPU capacity in millicores</li>
+                    <li><strong>CPU Alloc (m)</strong>: CPU allocatable in millicores</li>
+                    <li><strong>Mem Cap (Mi)</strong>: Memory capacity in MiB</li>
+                    <li><strong>Mem Alloc (Mi)</strong>: Memory allocatable in MiB</li>
+                    <li><strong>CPU Util %</strong>: Allocatable / Capacity * 100</li>
+                    <li><strong>Mem Util %</strong>: Allocatable / Capacity * 100</li>
                 </ul>
             </div>
         </div>

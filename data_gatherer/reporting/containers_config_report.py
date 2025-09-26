@@ -171,14 +171,26 @@ class ContainerConfigurationReport(ReportGenerator):
         parts = []
         parts.append(f'<h1>{title}</h1>')
         parts.append('<p>Complete container configuration analysis including resource allocation, health settings, and deployment configuration.</p>')
+        # Comprehensive column legend: every table header must be represented here
         legend_sections = get_common_legend_sections() + [
             {
-                "title": "Key Columns",
+                "title": "Columns",
                 "items": [
-                    "<strong>CPU_req_m/CPU_lim_m</strong>: CPU requests/limits in millicores",
-                    "<strong>Mem_req_Mi/Mem_lim_Mi</strong>: Memory requests/limits in MiB",
-                    "<strong>Readiness_Probe</strong>: Health check configuration",
-                    "<strong>Image_Pull_Policy</strong>: Always/IfNotPresent/Never"
+                    "<strong>Kind</strong>: Workload controller kind (Deployment / StatefulSet / etc.)",
+                    "<strong>Namespace</strong>: Kubernetes namespace (blank if cluster‑scoped)",
+                    "<strong>Name</strong>: Workload name",
+                    "<strong>Container</strong>: Container name inside spec",
+                    "<strong>Type</strong>: main or init",
+                    "<strong>Replicas</strong>: Desired replicas (DaemonSet blank)",
+                    "<strong>CPU_req_m</strong>: CPU requests in millicores",
+                    "<strong>CPU_lim_m</strong>: CPU limits in millicores",
+                    "<strong>Mem_req_Mi</strong>: Memory requests in MiB",
+                    "<strong>Mem_lim_Mi</strong>: Memory limits in MiB",
+                    "<strong>Readiness_Probe</strong>: timeout / initial delay or Not configured",
+                    "<strong>Image_Pull_Policy</strong>: Container image pull policy",
+                    "<strong>Node_Selectors</strong>: nodeSelector key=value list or None",
+                    "<strong>Pod_Labels</strong>: Pod template labels key=value list or None",
+                    "<strong>Java_Opts</strong>: Discovered JAVA options (env / ConfigMap) or Not configured"
                 ]
             }
         ]

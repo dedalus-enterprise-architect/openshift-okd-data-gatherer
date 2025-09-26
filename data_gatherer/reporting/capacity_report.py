@@ -97,7 +97,27 @@ class CapacityReport(ReportGenerator):
         parts = [f"<h1>{title}</h1>"]
         # Legend now aligned with unified rules engine severities instead of legacy missing-req/missing-lim classes.
         # We still show structural row styles (totals) in a separate section for orientation.
+        # Column legend (must cover every table header)
         capacity_legend_sections = [
+            {
+                'title': 'Columns',
+                'items': [
+                    'Kind: Workload controller kind (Deployment / StatefulSet / etc.)',
+                    'Namespace: Kubernetes namespace (blank for cluster‑scoped)',
+                    'Name: Workload name',
+                    'Container: Container name inside pod spec',
+                    'Type: Container type (main or init)',
+                    'Replicas: Desired replicas (blank for DaemonSet)',
+                    'CPU_req_m: CPU request (millicores)',
+                    'CPU_lim_m: CPU limit (millicores)',
+                    'Mem_req_Mi: Memory request (MiB)',
+                    'Mem_lim_Mi: Memory limit (MiB)',
+                    'CPU_req_m_total: CPU request * replicas (aggregated)',
+                    'CPU_lim_m_total: CPU limit * replicas (aggregated)',
+                    'Mem_req_Mi_total: Memory request * replicas (aggregated)',
+                    'Mem_lim_Mi_total: Memory limit * replicas (aggregated)'
+                ]
+            },
             {
                 'title': 'Configuration Severities',
                 'items': [

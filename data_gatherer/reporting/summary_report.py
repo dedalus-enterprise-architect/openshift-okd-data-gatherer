@@ -29,17 +29,34 @@ class SummaryReport(ReportGenerator):
         <div class="legend">
             <h3>Legend</h3>
             <div class="legend-section">
-                <h4>Workloads</h4>
+                <h4>Summary Items</h4>
                 <ul>
-                    <li><strong>Total</strong>: All synchronized workloads</li>
-                    <li><strong>Active</strong>: Currently existing</li>
+                    <li><strong>Total workloads</strong>: Count of all rows in snapshot</li>
+                    <li><strong>Active workloads</strong>: Same as total (snapshot only, non-deleted)</li>
                 </ul>
             </div>
             <div class="legend-section">
-                <h4>Nodes</h4>
+                <h4>By Kind Table Columns</h4>
                 <ul>
-                    <li><strong>Role</strong>: master/infra/worker</li>
-                    <li><strong>CPU/Memory</strong>: Node capacity</li>
+                    <li><strong>Kind</strong>: Workload controller kind</li>
+                    <li><strong>Count</strong>: Number of workloads of that kind</li>
+                </ul>
+            </div>
+            <div class="legend-section">
+                <h4>Nodes Table Columns</h4>
+                <ul>
+                    <li><strong>Name</strong>: Node name</li>
+                    <li><strong>Role</strong>: master / infra / worker (or other)</li>
+                    <li><strong>Instance</strong>: Instance type</li>
+                    <li><strong>Zone</strong>: Availability zone / failure domain</li>
+                    <li><strong>CPU</strong>: Node CPU capacity (raw value)</li>
+                    <li><strong>Memory</strong>: Node Memory capacity (raw value)</li>
+                </ul>
+            </div>
+            <div class="legend-section">
+                <h4>Workloads (Namespace Section)</h4>
+                <ul>
+                    <li><strong>details blocks</strong>: Expand to view full manifest JSON per workload</li>
                 </ul>
             </div>
         </div>
