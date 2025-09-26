@@ -121,10 +121,10 @@ class CapacityReport(ReportGenerator):
             {
                 'title': 'Configuration Severities',
                 'items': [
-                    {'class': 'error-miss-cell', 'description': 'ERROR_MISS – Required value missing (CPU/Mem request, readiness probe)'},
-                    {'class': 'warning-miss-cell', 'description': 'WARNING_MISS – Recommended value missing (CPU/Mem limit)'},
-                    {'class': 'error-misconf-cell', 'description': 'ERROR_MISCONF – Limit >= smallest node size'},
-                    {'class': 'warning-misconf-cell', 'description': 'WARNING_MISCONF – Request <=20% of limit or ImagePullPolicy=Always'}
+                    {'class': 'error-miss-cell', 'description': 'Required value or parameter is missing'},
+                    {'class': 'warning-miss-cell', 'description': 'Recommended value or parameter is missing'},
+                    {'class': 'error-misconf-cell', 'description': 'Wrong value or parameter set'},
+                    {'class': 'warning-misconf-cell', 'description': 'Value or parameter set should be re-evaluated'}
                 ]
             },
             {

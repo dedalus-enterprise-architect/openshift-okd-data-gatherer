@@ -104,7 +104,14 @@ def build_legend_html(sections: List[Dict[str, Any]]) -> str:
         for item in section["items"]:
             if isinstance(item, dict):
                 if 'class' in item and 'description' in item:
-                    parts.append(f'<li><span class="legend-box {item["class"]}"></span> <strong>{item["description"]}</strong></li>')
+                    # Apply the class also to the <strong> element only for misconfiguration (text-color) classes
+                    item_class = item["class"]
+                    strong_class = item_class if item_class.endswith('misconf-cell') else ''
+                    class_attr = f' class="{strong_class}"' if strong_class else ''
+                    parts.append(
+                        f'<li><span class="legend-box {item_class}"></span> '
+                        f'<strong{class_attr}>{item["description"]}</strong></li>'
+                    )
                 elif 'description' in item:
                     parts.append(f'<li>{item["description"]}</li>')
                 else:
@@ -136,9 +143,8 @@ table tr:hover { background-color: #e3f2fd !important; transition: background-co
 .legend { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px 15px 15px 15px; margin: 15px 0; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; position: relative; }
 .legend summary { cursor: pointer; list-style: none; font-size: 12px; font-weight: 600; color: #343a40; margin: 0 0 6px 0; }
 .legend summary::-webkit-details-marker { display: none; }
-.legend summary::before { content: '\25BE'; /* small down arrow */ display: inline-block; margin-right: 6px; transition: transform 0.2s ease; }
-.legend[open] summary::before { transform: rotate(0deg); }
-.legend:not([open]) summary::before { transform: rotate(-90deg); }
+.legend summary::before { content: '▸'; /* right-pointing small triangle */ display: inline-block; margin-right: 6px; transition: transform 0.2s ease; transform: rotate(0deg); }
+.legend[open] summary::before { transform: rotate(90deg); }
 .legend h4 { margin: 10px 0 5px 0; color: #495057; font-size: 11px; font-weight: 500; }
 .legend-section { margin-bottom: 20px; }
 .legend ul { margin: 8px 0; padding-left: 24px; }
