@@ -24,11 +24,27 @@ The database always reflects the latest sync; removed objects disappear automati
 
 ---
 ## 3. Quick Start
-1. Create an isolated Python environment (virtual environment or similar).
-2. Install the dependencies listed in `requirements.txt`.
-3. Copy `config/example-config.yaml` to `config/config.yaml` and edit for your clusters.
-4. Run the CLI subcommands in this order for each cluster: `init` → `sync` → `report`.
-5. Open the generated HTML report(s) under `clusters/<cluster>/reports/`.
+1. (If not already) Clone this repository and `cd` into it.
+2. Create & activate a Python virtual environment.
+3. Install dependencies: `pip install -r requirements.txt`.
+4. Copy the sample config: `cp config/example-config.yaml config/config.yaml`.
+5. Edit `config/config.yaml` with at least one cluster (choose ONE auth method per cluster).
+6. (Optional, but recommended first time) Set up read‑only RBAC in the cluster; see Section 5 and run `rbac/setup-rbac.sh` to obtain token/host values, then update the config.
+7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
+8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
+9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.
+10. Open the HTML files in `clusters/my-cluster/reports/`.
+
+Compact first run (single cluster):
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp config/example-config.yaml config/config.yaml  # edit it now
+python -m data_gatherer.run init --cluster my-cluster \
+	&& python -m data_gatherer.run sync --cluster my-cluster \
+	&& python -m data_gatherer.run report --cluster my-cluster --all
+# Open clusters/my-cluster/reports/*.html
+```
 
 ### Basic Usage Example (Single Cluster)
 ```bash
@@ -201,11 +217,11 @@ Full descriptions, use cases, highlighting meanings, and filename conventions ar
 
 
 ---
-## 9. Node Sizing Snapshot
+## 8. Node Sizing Snapshot
 Include `Node` in `include_kinds` to capture per-node capacity + allocatable plus basic attributes (roles, instance type, zone). View with the `nodes` command or nodes report. This is a point‑in‑time view (no historical trend retention).
 
 ---
-## 10. Operational Tips
+## 9. Operational Tips
 * Re-run `sync` any time – it replaces previous data safely.
 * Removing a kind from `include_kinds` will cause its historical rows to be cleaned during the next sync.
 * If a cluster is unreachable, previously synced kinds stay until successfully re-synced or removed from config.
@@ -217,12 +233,12 @@ Troubleshooting:
 * Missing reports directory → generate at least one report; it will be created automatically.
 
 ---
-## 11. Security & Safety
+## 10. Security & Safety
 * Prefer a dedicated service account with the provided read‑only role.
 * Keep `verify_ssl: true`; only disable temporarily for initial testing.
 
 ---
-## 12. Frequently Asked (FAQ)
+## 11. Frequently Asked (FAQ)
 **Does it show real-time usage?** No. It shows declared requests/limits and node capacity only.
 
 **Can I add custom resource kinds?** Limit to the listed supported kinds for now; trimming the list is safe.
