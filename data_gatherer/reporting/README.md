@@ -44,10 +44,10 @@ Reports apply a unified rules engine to highlight configuration quality issues. 
 ### Severity & Visual Encoding
 | Category | Style | Meaning |
 |----------|-------|---------|
-| ERROR_MISS | Red background (`error-miss-cell`) | Required value or parameter is missing |
-| WARNING_MISS | Yellow background (`warning-miss-cell`) | Recommended value or parameter is missing |
-| ERROR_MISCONF | Red text (`error-misconf-cell`) | Wrong value or parameter set |
-| WARNING_MISCONF | Orange text (`warning-misconf-cell`) | Value or parameter set should be re-evaluated |
+| ERROR_MISS | Red background | Required value or parameter is missing |
+| WARNING_MISS | Yellow background | Recommended value or parameter is missing |
+| ERROR_MISCONF | Red text | Wrong value or parameter set |
+| WARNING_MISCONF | Orange text | Value or parameter set should be re-evaluated |
 
 ### Implemented Rules
 
@@ -66,7 +66,7 @@ Legend: 🟥 / 🔴 = error, 🟨 / 🟧 = warning (background-like vs text-like
 | 9 | Memory limits value is higher than the total amount of RAM of the smallest cluster worker node | ERROR_MISCONF | 🔴 |
 
 ### Rule Implementation
-Rules are defined in `rules/official_rules.py` and dispatched through the rules engine (`rules/engine.py`). The renderer (`common.format_cell_with_condition`) applies the CSS class corresponding to the highest severity rule triggered for that cell.
+Rules are defined in `rules/official_rules.py` and dispatched through the rules engine (`rules/engine.py`). The renderer applies the CSS class corresponding to the highest severity rule triggered for that cell.
 
 ## Usage
 
