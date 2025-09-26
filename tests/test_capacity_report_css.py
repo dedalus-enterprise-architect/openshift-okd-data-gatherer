@@ -108,10 +108,9 @@ def test_capacity_report_css_classes(tmp_path):
     assert 'background-color: #fff3cd' in content, 'warning cell background color not found'
     assert 'background-color: #f8d7da' in content, 'error cell background color not found'
     
-    # Check that totals sections exist (without specific class names)
+    # Check that table totals rows still exist (main/all and overhead) but no overall cluster summary block
     assert 'Totals (main containers)' in content
     assert 'Totals (all containers incl. init)' in content
     assert 'Overhead (init containers)' in content
-
-    # Cluster totals wrapper row present
-    assert 'class="cluster-totals-row"' in content
+    # Cluster totals wrapper removed; ensure legacy marker absent
+    assert 'class="cluster-totals-row"' not in content

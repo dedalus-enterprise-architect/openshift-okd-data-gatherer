@@ -181,13 +181,6 @@ def test_capacity_report_math(tmp_path):
     assert '<th colspan="6">Overhead (init containers)</th>' in html
     assert '25</th>' in html and '50</th>' in html and '100</th>' in html and '200 (0.20 GiB)</th>' in html
 
-    # --- Cluster summary list items ---
-    assert '<li><strong>Main containers (total requests CPU):</strong> 2050 m (2.05 cores)</li>' in html
-    assert '<li><strong>Main containers (total limits CPU):</strong> 4000 m (4.00 cores)</li>' in html
-    assert '<li><strong>All containers (total requests CPU):</strong> 2100 m (2.10 cores)</li>' in html
-    assert '<li><strong>All containers (total limits CPU):</strong> 4100 m (4.10 cores)</li>' in html
-    assert '<li><strong>Main containers (total memory):</strong> ' in html  # presence
-    assert '<li><strong>All containers (total memory):</strong> ' in html
-    # Overhead lines
-    assert '<li><strong>CPU overhead:</strong> 50 m (0.05 cores)</li>' in html
-    assert '<li><strong>Memory overhead:</strong> 100 Mi (0.10 GiB)</li>' in html
+    # Removed cluster summary list items; ensure new resource summary section appears
+    assert 'Resource Summary (Cluster-wide)' in html
+    assert '<h3>Containers</h3>' in html and '<h3>Worker Nodes</h3>' in html

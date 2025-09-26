@@ -182,6 +182,9 @@ class CapacityReport(ReportGenerator):
                     format_cell_with_condition(f'{ns_main_mem_lim_total} ({ns_main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
                 ]
                 parts.append('<tr>' + ''.join(ns_totals_cells) + '</tr>')
+        # Visual spacing between per-namespace section and global totals
+        if table_rows:
+            parts.append('<tr class="section-separator"><td colspan="14"></td></tr>')
         if table_rows:
             overhead_cpu_total = all_cpu_total - main_cpu_total
             overhead_mem_total = all_mem_total - main_mem_total
@@ -223,31 +226,102 @@ class CapacityReport(ReportGenerator):
                 format_cell_with_condition(f'{all_mem_lim_total - main_mem_lim_total} ({(all_mem_lim_total - main_mem_lim_total)/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
             parts.append('<tr>' + ''.join(overhead_totals_cells) + '</tr>')
-            parts.append('<tr class="cluster-totals-row"><td colspan="14">')
-            parts.append('<h2>Cluster Totals</h2>')
-            main_cpu_cores = main_cpu_total / 1000
-            main_cpu_lim_cores = main_cpu_lim_total / 1000
-            all_cpu_cores = all_cpu_total / 1000
-            all_cpu_lim_cores = all_cpu_lim_total / 1000
-            parts.append('<ul>')
-            parts.append(f'<li><strong>Main containers (total requests CPU):</strong> {main_cpu_total} m ({main_cpu_cores:.2f} cores)</li>')
-            parts.append(f'<li><strong>Main containers (total limits CPU):</strong> {main_cpu_lim_total} m ({main_cpu_lim_cores:.2f} cores)</li>')
-            parts.append(f'<li><strong>Main containers (total memory):</strong> {main_mem_total/1024:.2f} GiB</li>')
-            parts.append(f'<li><strong>Main containers (total limits memory):</strong> {main_mem_lim_total/1024:.2f} GiB</li>')
-            parts.append(f'<li><strong>All containers (total requests CPU):</strong> {all_cpu_total} m ({all_cpu_cores:.2f} cores)</li>')
-            parts.append(f'<li><strong>All containers (total limits CPU):</strong> {all_cpu_lim_total} m ({all_cpu_lim_cores:.2f} cores)</li>')
-            parts.append(f'<li><strong>All containers (total memory):</strong> {all_mem_total/1024:.2f} GiB</li>')
-            parts.append(f'<li><strong>All containers (total limits memory):</strong> {all_mem_lim_total/1024:.2f} GiB</li>')
-            parts.append('</ul>')
-            parts.append('<h3>Init Container Overhead</h3>')
-            parts.append('<ul>')
-            parts.append(f'<li><strong>CPU overhead:</strong> {overhead_cpu_total} m ({overhead_cpu_cores:.2f} cores)</li>')
-            parts.append(f'<li><strong>Memory overhead:</strong> {overhead_mem_total} Mi ({overhead_mem_gib:.2f} GiB)</li>')
-            parts.append('</ul>')
-            parts.append('</td></tr>')
         parts.append('</table>')
         if not table_rows:
             parts.append('<p>No container workloads found for this cluster.</p>')
+        # Cluster-wide resource summary (containers vs worker node capacity/allocatable)
+        try:
+            cur = db._conn.cursor()
+            node_rows = cur.execute(
+                "SELECT cpu_capacity, cpu_allocatable, memory_capacity, memory_allocatable, node_role "
+                "FROM node_capacity WHERE cluster=? AND deleted=0",
+                (cluster,)
+            ).fetchall()
+        except Exception:  # pragma: no cover - defensive, should not fail
+            node_rows = []
+
+        def _parse_cpu(val: str | None) -> int:
+            """Convert cpu capacity string to millicores."""
+            if not val:
+                return 0
+            v = val.strip()
+            if v.endswith('m'):
+                try:
+                    return int(v[:-1])
+                except ValueError:
+                    return 0
+            # Assume cores (can be fractional e.g. '0.5')
+            try:
+                return int(float(v) * 1000)
+            except ValueError:
+                return 0
+
+        def _parse_mem(val: str | None) -> int:
+            """Convert memory capacity string to Mi."""
+            if not val:
+                return 0
+            v = val.strip()
+            try:
+                if v.endswith('Ki'):
+                    return int(v[:-2]) // 1024
+                if v.endswith('Mi'):
+                    return int(v[:-2])
+                if v.endswith('Gi'):
+                    return int(v[:-2]) * 1024
+                return int(v)  # assume already Mi
+            except ValueError:
+                return 0
+
+        worker_cpu_cap = worker_cpu_alloc = worker_mem_cap = worker_mem_alloc = 0
+        for nr in node_rows:
+            if (nr[4] or '').lower() == 'worker':
+                worker_cpu_cap += _parse_cpu(nr[0])
+                worker_cpu_alloc += _parse_cpu(nr[1])
+                worker_mem_cap += _parse_mem(nr[2])
+                worker_mem_alloc += _parse_mem(nr[3])
+
+        parts.append('<h2>Resource Summary (Cluster-wide)</h2>')
+        # Table 1: Container aggregates (requests / limits)
+        parts.append('<h3>Containers</h3>')
+        parts.append('<table border=1 cellpadding=4 cellspacing=0>')
+        parts.append('<tr>'
+                     '<th>Scope</th>'
+                     '<th>CPU Requests (m)</th>'
+                     '<th>CPU Limits (m)</th>'
+                     '<th>Memory Requests (Mi)</th>'
+                     '<th>Memory Limits (Mi)</th>'
+                     '</tr>')
+        parts.append('<tr>'
+                     f'<td>Main containers</td>'
+                     f'<td>{main_cpu_total}</td>'
+                     f'<td>{main_cpu_lim_total}</td>'
+                     f'<td>{main_mem_total}</td>'
+                     f'<td>{main_mem_lim_total}</td>'
+                     '</tr>')
+        parts.append('<tr>'
+                     f'<td>All containers (incl. init)</td>'
+                     f'<td>{all_cpu_total}</td>'
+                     f'<td>{all_cpu_lim_total}</td>'
+                     f'<td>{all_mem_total}</td>'
+                     f'<td>{all_mem_lim_total}</td>'
+                     '</tr>')
+        parts.append('</table>')
+        # Table 2: Worker node capacity / allocatable
+        parts.append('<h3>Worker Nodes</h3>')
+        parts.append('<table border=1 cellpadding=4 cellspacing=0>')
+        parts.append('<tr>'
+                     '<th>CPU Capacity (m)</th>'
+                     '<th>CPU Allocatable (m)</th>'
+                     '<th>Memory Capacity (Mi)</th>'
+                     '<th>Memory Allocatable (Mi)</th>'
+                     '</tr>')
+        parts.append('<tr>'
+                     f'<td>{worker_cpu_cap}</td>'
+                     f'<td>{worker_cpu_alloc}</td>'
+                     f'<td>{worker_mem_cap}</td>'
+                     f'<td>{worker_mem_alloc}</td>'
+                     '</tr>')
+        parts.append('</table>')
         additional_css = (
             " .totals-row-main th { background:#dfe; }"
             " .totals-row-all th { background:#def; }"
@@ -257,6 +331,7 @@ class CapacityReport(ReportGenerator):
             " .legend-box.totals-row-all { background: #def; }"
             " .legend-box.totals-row-overhead { background: #fed; }"
             " .legend-box.ns-totals { background: #f5f5f5; }"
+            " .section-separator td { background:#fff; border:0; height:14px; }"
         )
         # Pass the additional CSS (structural row highlighting + legend swatches) into wrapper
         html_doc = wrap_html_document(title, parts, additional_css)

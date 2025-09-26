@@ -160,12 +160,11 @@ logging:
     assert 'Resource Summary by Namespace' in content
     assert '<td><strong>production</strong></td>' in content
     assert '<td><strong>storage</strong></td>' in content
-    assert 'Cluster Totals' in content
-    # New: ensure limit totals appear in cluster summary
-    assert 'Main containers (total limits CPU)' in content
-    assert 'All containers (total limits CPU)' in content
-    assert 'Main containers (total limits memory)' in content
-    assert 'All containers (total limits memory)' in content
+    # Removed legacy Cluster Totals / Init Container Overhead summary block.
+    # Validate new cluster-wide resource summary tables exist.
+    assert 'Resource Summary (Cluster-wide)' in content
+    assert '<h3>Containers</h3>' in content
+    assert '<h3>Worker Nodes</h3>' in content
     
     # Check resource calculations
     # Production namespace: web-app (3 replicas) + batch-process (2 replicas)
@@ -176,8 +175,7 @@ logging:
     # Main containers: 500m * 2 = 1000m = 1.00 cores
     assert '1.00' in content or '1000' in content
     
-    # Check for init container overhead
-    assert 'Init Container Overhead' in content
+    # Init container overhead list removed; overhead still reflected in "All containers" totals.
 
 
 def test_capacity_report_empty_data(tmp_path):
@@ -309,7 +307,8 @@ logging:
     # Memory: 100Mi * 5 = 500Mi = ~0.49 GiB
     # Total: 1.50 CPU cores, ~5.49 GiB
     
-    assert '1.00' in content  # Main CPU
-    assert '5.00' in content  # Main memory
-    assert '1.50' in content  # Total CPU
-    assert '0.50' in content  # Init container overhead CPU
+    # Validate presence of container totals row values (in tables) rather than list summary
+    assert '1000' in content  # main CPU total m
+    assert '5120' in content  # main memory total Mi
+    assert '1500' in content  # all CPU total m (main+init)
+    assert '5620' in content or '5620' in content  # total memory Mi (approx main+init)
