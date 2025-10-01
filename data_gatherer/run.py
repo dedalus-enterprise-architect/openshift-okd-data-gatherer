@@ -200,6 +200,7 @@ def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
     from .reporting import containers_config_report  # noqa: F401
     from .reporting import nodes_report  # noqa: F401
     from .reporting import capacity_report  # noqa: F401
+    from .reporting import cluster_capacity_report  # noqa: F401
     if list_types:
         click.echo('Available report types:')
         for t in get_report_types():

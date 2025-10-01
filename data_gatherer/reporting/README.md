@@ -28,6 +28,44 @@ This directory contains report generators for analyzing OpenShift cluster data s
 - **Output**: HTML report with container settings and best practices
 - **Focus**: Configuration compliance and optimization recommendations
 
+### Cluster Capacity Report (`cluster-capacity`)
+**Purpose**: High-level namespace resource demand vs cluster worker allocatable capacity
+**File**: `cluster_capacity_report.py`
+**Output**: HTML table: per-namespace CPU/Memory requests & limits (main containers only), % of worker allocatable, totals row, and summary table with free allocatable resources
+**Focus**: Detect hotspots / over-allocation risk using only current snapshot (no historical trends)
+
+**Table Columns:**
+- Namespace
+- CPU Requests (m) – Σ (replicas × Σ main-container request)
+- Memory Requests (Mi) – Σ (replicas × Σ main-container request)
+- CPU Limits (m) – Σ (replicas × Σ main-container limit)
+- Memory Limits (Mi) – Σ (replicas × Σ main-container limit)
+- % Allocatable Cluster CPU – NamespaceRequests ÷ WorkerAllocatable × 100
+- % Allocatable Cluster Memory – NamespaceRequests ÷ WorkerAllocatable × 100
+
+**Totals Row:**
+- Aggregated namespace requests & limits (percent uses requests)
+
+**Summary Table:**
+- Cluster Worker Allocatable baseline
+- Main Containers Requests
+- Free Allocatable (Allocatable - Requests, clamped at 0)
+- Main Containers Limits
+
+**Legend & Formulas:**
+- NamespaceCPURequests = Σ_workloads ( replicas × Σ_mainContainers cpu_request_m )
+- NamespaceMemoryRequests = Σ_workloads ( replicas × Σ_mainContainers memory_request_Mi )
+- ClusterAllocatableCPU = Σ_workers allocatable_cpu_m (capacity fallback)
+- CPU% = NamespaceCPURequests / ClusterAllocatableCPU × 100
+- FreeCPU = max(0, ClusterAllocatableCPU - TotalCPURequests)
+- Same pattern for Memory metrics
+
+**Notes:**
+- Only main (regular) containers included (runtime footprint)
+- Limits are shown per-namespace and in totals (not used for % calculations)
+- Allocatable preferred; capacity used only as fallback when allocatable missing
+- Report type name was renamed from `sizing` to `cluster-capacity` (no backward alias)
+
 ## Report Layout Standards
 
 All reports follow consistent styling:
