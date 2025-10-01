@@ -16,6 +16,16 @@ from kubernetes import client as k8s_client
 DEFAULT_DATA_DIR = 'clusters'
 DB_FILENAME = 'data.db'
 
+def _get_file_extension(format_name: str, generator) -> str:
+    """Get appropriate file extension based on format."""
+    if format_name == 'excel':
+        return '.xlsx'
+    elif format_name == 'html':
+        return '.html'
+    else:
+        # Fallback to generator's default extension
+        return getattr(generator, 'file_extension', '.html')
+
 @click.group()
 @click.option('--config', default='config/config.yaml', help='Config file path')
 @click.pass_context
@@ -189,11 +199,12 @@ def sync(ctx, clusters, all_clusters, kind):
 @click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to report on')
 @click.option('--all-clusters', is_flag=True, help='Generate reports for all configured clusters')
 @click.option('--type', 'report_type', default='summary', help='Report type (default: summary). Use --list-types to view all.')
+@click.option('--format', 'output_format', default='html', help='Output format (html, excel). Default: html')
 @click.option('--out', required=False, help='Explicit output file path (single-cluster only)')
 @click.option('--all', is_flag=True, help='Generate all available report types')
 @click.option('--list-types', is_flag=True, help='List available report types and exit')
 @click.pass_context
-def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
+def report(ctx, clusters, all_clusters, report_type, output_format, out, all, list_types):
     from datetime import datetime
     from .reporting.base import get_report_types, get_generator
     from .reporting import summary_report  # noqa: F401
@@ -238,9 +249,15 @@ def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
                 try:
                     generator = get_generator(current_type)
                     prefix = getattr(generator, 'filename_prefix', 'report-')
-                    current_out = os.path.join(reports_dir, f'{prefix}{ts}{generator.file_extension}')
+                    # For --all, default to HTML format unless generator only supports other formats
+                    format_to_use = 'html' if 'html' in getattr(generator, 'supported_formats', ['html']) else getattr(generator, 'supported_formats', ['html'])[0]
+                    file_ext = _get_file_extension(format_to_use, generator)
+                    current_out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
                     click.echo(f'Generating {current_type} report...')
-                    generator.generate(db, cluster, current_out)
+                    if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+                        generator.generate(db, cluster, current_out, format_to_use)
+                    else:
+                        generator.generate(db, cluster, current_out)
                     generated_reports.append(current_out)
                     click.echo(f'  ✓ Wrote {current_type} report to {current_out}')
                 except Exception as e:
@@ -252,13 +269,25 @@ def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
             generator = get_generator(report_type)
         except ValueError as e:
             raise click.ClickException(str(e))
+        
+        # Validate format support
+        supported_formats = getattr(generator, 'supported_formats', ['html'])
+        if output_format not in supported_formats:
+            raise click.ClickException(f'Report type {report_type} does not support format {output_format}. Supported: {", ".join(supported_formats)}')
+        
         if not out:
             reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
             os.makedirs(reports_dir, exist_ok=True)
             ts = datetime.now().strftime('%Y%m%dT%H%M%S')
             prefix = getattr(generator, 'filename_prefix', 'report-')
-            out = os.path.join(reports_dir, f'{prefix}{ts}{generator.file_extension}')
-        generator.generate(db, cluster, out)
+            file_ext = _get_file_extension(output_format, generator)
+            out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
+        
+        # Call generate with format parameter if supported
+        if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+            generator.generate(db, cluster, out, output_format)
+        else:
+            generator.generate(db, cluster, out)
         click.echo(f'Wrote {report_type} report to {out}')
         return
     # multi-cluster path
@@ -288,10 +317,16 @@ def report(ctx, clusters, all_clusters, report_type, out, all, list_types):
                 click.echo(f'Skipping {cluster} report {t}: {e}')
                 continue
             prefix = getattr(generator, 'filename_prefix', 'report-')
-            current_out = os.path.join(reports_dir, f'{prefix}{ts}{generator.file_extension}')
+            # For multi-cluster, use specified format or default to HTML
+            format_to_use = output_format if hasattr(generator, 'supported_formats') and output_format in generator.supported_formats else 'html'
+            file_ext = _get_file_extension(format_to_use, generator)
+            current_out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
             click.echo(f'[{cluster}] Generating {t} report...')
             try:
-                generator.generate(db, cluster, current_out)
+                if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+                    generator.generate(db, cluster, current_out, format_to_use)
+                else:
+                    generator.generate(db, cluster, current_out)
                 click.echo(f'[{cluster}] ✓ {t} -> {current_out}')
             except Exception as e:
                 click.echo(f'[{cluster}] ✗ Failed {t}: {e}')

@@ -9,6 +9,7 @@ from .common import (
     format_cell_with_condition
 )
 import html
+import os
 
 
 @register
@@ -16,8 +17,23 @@ class ContainerConfigurationReport(ReportGenerator):
     type_name = 'containers-config'
     file_extension = '.html'
     filename_prefix = 'containers-config-'
+    supported_formats = ['html', 'excel']
 
-    def generate(self, db: WorkloadDB, cluster: str, out_path: str) -> None:
+    def generate(self, db: WorkloadDB, cluster: str, out_path: str, format: str = 'html') -> None:
+        # Generate the core data
+        table_rows, headers = self._generate_data(db, cluster)
+        title = f"Container Configuration Report: {cluster}"
+        
+        if format.lower() == 'excel':
+            self._generate_excel(title, headers, table_rows, out_path)
+        else:
+            # Default to HTML
+            html_content = self._build_html_document(title, headers, table_rows, cluster)
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+    def _generate_data(self, db: WorkloadDB, cluster: str):
+        """Generate the core data structure used by both HTML and Excel formats."""
         wq = WorkloadQueries(db)
         rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
         table_rows = []
@@ -54,11 +70,11 @@ class ContainerConfigurationReport(ReportGenerator):
                     name,
                     container_name,
                     ctype,
-                    str(replicas) if replicas is not None else '',
-                    str(cpu_req) if cpu_req is not None else '',
-                    str(cpu_lim) if cpu_lim is not None else '',
-                    str(mem_req) if mem_req is not None else '',
-                    str(mem_lim) if mem_lim is not None else '',
+                    replicas if replicas is not None else '',
+                    cpu_req if cpu_req is not None else '',
+                    cpu_lim if cpu_lim is not None else '',
+                    mem_req if mem_req is not None else '',
+                    mem_lim if mem_lim is not None else '',
                     readiness_probe,
                     image_pull_policy,
                     node_selector,
@@ -66,15 +82,115 @@ class ContainerConfigurationReport(ReportGenerator):
                     java_opts
                 ]
                 table_rows.append(row)
-        title = f"Container Configuration Report: {html.escape(cluster)}"
+        
         headers = [
             "Kind", "Namespace", "Name", "Container", "Type",
             "Replicas", "CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi",
             "Readiness_Probe", "Image_Pull_Policy", "Node_Selectors", "Pod_Labels", "Java_Opts"
         ]
-        html_content = self._build_html_document(title, headers, table_rows, cluster)
-        with open(out_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
+        return table_rows, headers
+
+    def _generate_excel(self, title: str, headers: list, table_rows: list, out_path: str) -> None:
+        """Generate Excel output with formatting and conditional highlighting."""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            raise ImportError("openpyxl is required for Excel output. Install with: pip install openpyxl")
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Container Configuration"
+        
+        # Set up styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Error/Warning styles for conditional formatting
+        error_fill = PatternFill(start_color="F8D7DA", end_color="F8D7DA", fill_type="solid")
+        warning_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+        error_font = Font(color="721C24")
+        warning_font = Font(color="856404")
+        
+        # Write title
+        ws.merge_cells('A1:O1')
+        title_cell = ws['A1']
+        title_cell.value = title
+        title_cell.font = Font(bold=True, size=16)
+        title_cell.alignment = Alignment(horizontal="center")
+        
+        # Write headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Write data rows with conditional formatting
+        for row_idx, row_data in enumerate(table_rows, 4):
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.value = value
+                cell.border = border
+                
+                # Apply conditional formatting based on column and value
+                header_name = headers[col_idx - 1] if col_idx <= len(headers) else ""
+                
+                # Apply formatting rules similar to HTML version
+                if header_name in ["CPU_req_m", "Mem_req_Mi"] and (value == "" or value is None):
+                    cell.fill = error_fill
+                    cell.font = error_font
+                elif header_name in ["CPU_lim_m", "Mem_lim_Mi"] and (value == "" or value is None):
+                    cell.fill = warning_fill
+                    cell.font = warning_font
+                elif header_name == "Readiness_Probe" and value == "Not configured":
+                    cell.fill = error_fill
+                    cell.font = error_font
+                elif header_name == "Image_Pull_Policy" and value == "Always":
+                    cell.fill = warning_fill
+                    cell.font = warning_font
+                
+                # Set alignment based on column type
+                if header_name in ["CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi", "Replicas"]:
+                    cell.alignment = Alignment(horizontal="right")
+                elif header_name in ["Kind", "Type"]:
+                    cell.alignment = Alignment(horizontal="center")
+        
+        # Auto-adjust column widths
+        for col in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col)
+            header_name = headers[col - 1]
+            
+            # Set specific widths for known columns
+            if header_name in ["Kind", "Type"]:
+                ws.column_dimensions[column_letter].width = 12
+            elif header_name in ["CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi", "Replicas"]:
+                ws.column_dimensions[column_letter].width = 10
+            elif header_name in ["Node_Selectors", "Pod_Labels", "Java_Opts"]:
+                ws.column_dimensions[column_letter].width = 40
+            elif header_name in ["Namespace", "Name", "Container"]:
+                ws.column_dimensions[column_letter].width = 20
+            else:
+                ws.column_dimensions[column_letter].width = 15
+        
+        # Add summary row
+        summary_row = len(table_rows) + 5
+        ws.cell(row=summary_row, column=1, value="Total containers:")
+        ws.cell(row=summary_row, column=2, value=len(table_rows))
+        ws.cell(row=summary_row, column=1).font = Font(bold=True)
+        ws.cell(row=summary_row, column=2).font = Font(bold=True)
+        
+        # Save the workbook
+        wb.save(out_path)
 
     def _extract_readiness_probe_timeout(self, container_def):
         readiness_probe = container_def.get('readinessProbe', {})
