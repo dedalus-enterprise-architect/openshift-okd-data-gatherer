@@ -154,6 +154,29 @@ table tr:hover { background-color: #e3f2fd !important; transition: background-co
 .error-miss-cell { background-color: #f8d7da !important; border-color: #f5c6cb !important; }
 .error-misconf-cell { color: #c92a2a !important; font-weight: 600; }
 .warning-misconf-cell { color: #d9480f !important; font-weight: 600; }
+/* Tooltip styling for rule violations shown on hover using data-tooltip on the <td> element.
+   Avoid adding extra classes so existing css_class values remain unchanged. */
+td[data-tooltip] { position: relative; cursor: help; }
+td[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    background: rgba(33,37,41,0.95);
+    color: #fff;
+    padding: 6px 8px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    max-width: 36rem;
+    font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transform: translateY(-8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    z-index: 1000;
+}
+td[data-tooltip]:hover::after { opacity: 1; transform: translateY(-10px); }
 """.strip()
 
 
@@ -192,9 +215,21 @@ def format_cell_with_condition(value: str, column_name: str, row_data: Optional[
     }
     result = rules_engine.evaluate_cell(context)
     css_class = result.css_class
+    # If rule result includes a message or matched_rule, expose it as an HTML data attribute
+    tooltip_text = ''
+    if result and (result.message or result.matched_rule):
+        tooltip_text = result.message or result.matched_rule or ''
+        tooltip_text = html.escape(str(tooltip_text))
+
+    data_attr = f' data-tooltip="{tooltip_text}"' if tooltip_text else ''
+    title_attr = f' title="{tooltip_text}"' if tooltip_text else ''
+
     if css_class:
-        return f'<td class="{css_class}">{escaped_value}</td>'
+        # preserve css_class verbatim
+        return f'<td class="{css_class}"{data_attr}{title_attr}>{escaped_value}</td>'
     else:
+        if tooltip_text:
+            return f'<td{data_attr}{title_attr}>{escaped_value}</td>'
         return f'<td>{escaped_value}</td>'
 
 

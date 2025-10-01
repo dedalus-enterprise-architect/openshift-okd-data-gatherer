@@ -99,7 +99,7 @@ class RequestLimitSkewRule(Rule):
                 req = int(row.get('Mem_req_Mi') or 0)
                 lim = int(row.get('Mem_lim_Mi') or 0)
             if lim > 0 and req > 0 and req/lim <= self.threshold:
-                return RuleResult(RuleType.WARNING_MISCONF, message="Request far below limit", matched_rule=self.name)
+                return RuleResult(RuleType.WARNING_MISCONF, message=f"Request <= {int(self.threshold*100)}% of limit", matched_rule=self.name)
         except Exception:
             pass
         return RuleResult(RuleType.NONE)
@@ -120,9 +120,9 @@ class LimitExceedsSmallestNodeRule(Rule):
         except Exception:
             return RuleResult(RuleType.NONE)
         if col == 'CPU_lim_m' and self.smallest_cpu_m and ival >= self.smallest_cpu_m:
-            return RuleResult(RuleType.ERROR_MISCONF, message="CPU limit >= smallest node", matched_rule=self.name)
+            return RuleResult(RuleType.ERROR_MISCONF, message="CPU limit >= smallest node CPUs", matched_rule=self.name)
         if col == 'Mem_lim_Mi' and self.smallest_mem_mi and ival >= self.smallest_mem_mi:
-            return RuleResult(RuleType.ERROR_MISCONF, message="Memory limit >= smallest node", matched_rule=self.name)
+            return RuleResult(RuleType.ERROR_MISCONF, message="Memory limit >= smallest node Memory", matched_rule=self.name)
         return RuleResult(RuleType.NONE)
 
 
