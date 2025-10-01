@@ -4,7 +4,7 @@ import tempfile
 import json
 
 
-def test_capacity_report_generation(tmp_path):
+def test_container_capacity_report_generation(tmp_path):
     """Test capacity aggregation report with sample workload data."""
     from data_gatherer.persistence.db import WorkloadDB
     from datetime import datetime, timezone
@@ -178,7 +178,7 @@ logging:
     # Init container overhead list removed; overhead still reflected in "All containers" totals.
 
 
-def test_capacity_report_empty_data(tmp_path):
+def test_container_capacity_report_empty_data(tmp_path):
     """Test capacity report generation when no workload data exists."""
     from data_gatherer.persistence.db import WorkloadDB
     
@@ -221,7 +221,7 @@ logging:
     assert 'No container workloads found for this cluster' in content
 
 
-def test_capacity_report_calculations(tmp_path):
+def test_container_capacity_report_calculations(tmp_path):
     """Test specific resource calculation scenarios."""
     from data_gatherer.persistence.db import WorkloadDB
     from datetime import datetime, timezone

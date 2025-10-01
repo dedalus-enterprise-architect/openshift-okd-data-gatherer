@@ -22,7 +22,7 @@ def _cfg(tmp_path, cluster: str) -> str:
     return str(p)
 
 
-def test_capacity_report_math(tmp_path):
+def test_container_capacity_report_math(tmp_path):
     from data_gatherer.persistence.db import WorkloadDB
 
     now = datetime.now(timezone.utc)

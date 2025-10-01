@@ -66,9 +66,9 @@ def test_sizing_report(tmp_path):
     assert '3,072' in content  # Memory requests (2*1024 + 2*512 = 3,072 with comma)
     assert 'CPU Limits (m)' in content
     assert 'Memory Limits (Mi)' in content
-    assert '% Allocatable Cluster CPU' in content
-    assert '% Allocatable Cluster Memory' in content
+    assert 'CPU % Allocatable' in content
+    assert 'Memory % Allocatable' in content
     assert '<strong>Totals</strong>' in content  # Totals row
     # Totals table presence and free allocatable row
     assert 'Container Requests vs Allocatable resources on Worker Nodes' in content
-    assert 'Free Allocatable (Allocatable - Requests)' in content
+    assert 'Free resources (Allocatable - Requests)' in content

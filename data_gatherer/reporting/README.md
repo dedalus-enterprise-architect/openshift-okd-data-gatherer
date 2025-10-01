@@ -4,11 +4,12 @@ This directory contains report generators for analyzing OpenShift cluster data s
 
 ## Available Reports
 
-### Capacity Report (`capacity`)
-- **Purpose**: Analyze declared CPU/memory requests & limits across controller-managed containers
-- **File**: `capacity_report.py`
-- **Output**: HTML report with resource aggregation tables + per‑namespace & cluster totals
-- **Focus**: Allocation patterns, gaps (missing values), and risk indicators (oversized limits, skewed request/limit ratios)
+### Container Capacity Report (`container-capacity`)
+**Purpose**: Analyze declared CPU/memory requests & limits across controller-managed containers
+**File**: `container_capacity_report.py`
+**Output**: HTML report with resource aggregation tables + per‑namespace & cluster totals
+**Focus**: Allocation patterns, gaps (missing values), and risk indicators (oversized limits, skewed request/limit ratios)
+**Tests**: `test_container_capacity_report.py`, `test_container_capacity_report_math.py`, `test_container_capacity_report_css.py`
 
 ### Nodes Report (`nodes`)
 - **Purpose**: Display cluster node information and capacity
@@ -117,11 +118,11 @@ python -m data_gatherer.run report --list-types
 # Single cluster: generate every report type
 python -m data_gatherer.run report --cluster my-cluster --all
 
-# Single cluster: only capacity report
-python -m data_gatherer.run report --cluster my-cluster --type capacity
+# Single cluster: only container capacity report
+python -m data_gatherer.run report --cluster my-cluster --type container-capacity
 
-# Two clusters: capacity report each
-python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
+# Two clusters: container capacity report each
+python -m data_gatherer.run report --cluster prod --cluster staging --type container-capacity
 
 # All configured clusters: all report types
 python -m data_gatherer.run report --all-clusters --all

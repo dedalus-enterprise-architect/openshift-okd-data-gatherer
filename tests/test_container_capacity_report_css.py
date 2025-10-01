@@ -19,7 +19,7 @@ def _write_config(tmp_path, cluster_name: str) -> str:
     return str(cfg_path)
 
 
-def test_capacity_report_css_classes(tmp_path):
+def test_container_capacity_report_css_classes(tmp_path):
     """Generate a report with deliberately missing requests/limits to assert CSS markers.
 
     Scenario:
