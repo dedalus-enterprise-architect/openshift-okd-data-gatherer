@@ -14,9 +14,10 @@ from .common import (
 
 @register
 class CapacityReport(ReportGenerator):
-    type_name = 'capacity'
+    # Renamed from 'capacity' to 'container-capacity' (no backward alias requested)
+    type_name = 'container-capacity'
     file_extension = '.html'
-    filename_prefix = 'capacity-'
+    filename_prefix = 'container-capacity-'
 
     def generate(self, db: WorkloadDB, cluster: str, out_path: str) -> None:  # pragma: no cover
         wq = WorkloadQueries(db)
@@ -157,7 +158,7 @@ class CapacityReport(ReportGenerator):
                 for i, col in enumerate(values):
                     if i < len(headers):
                         row_data = {headers[j]: values[j] for j in range(min(len(headers), len(values)))}
-                        cells.append(format_cell_with_condition(str(col), headers[i], row_data, 'capacity'))
+                        cells.append(format_cell_with_condition(str(col), headers[i], row_data, 'container-capacity'))
                     else:
                         cells.append(f'<td>{html.escape(str(col))}</td>')
                 parts.append('<tr>' + ''.join(cells) + '</tr>')
@@ -172,14 +173,14 @@ class CapacityReport(ReportGenerator):
                 ns_main_mem_lim_total = sum((int(r[13]) for r in rows_list if r[4] == 'main' and r[13] != ''), 0)
                 ns_totals_cells = [
                     '<th colspan="6">Namespace totals</th>',
-                    format_cell_with_condition(str(ns_main_cpu_raw), 'CPU_req_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_lim_raw), 'CPU_lim_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_raw), 'Mem_req_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_lim_raw), 'Mem_lim_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_total), 'CPU_req_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_lim_total), 'CPU_lim_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_total), 'Mem_req_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(f'{ns_main_mem_lim_total} ({ns_main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
+                    format_cell_with_condition(str(ns_main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                    format_cell_with_condition(str(ns_main_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
                 ]
                 parts.append('<tr>' + ''.join(ns_totals_cells) + '</tr>')
         # Visual spacing between per-namespace section and global totals
@@ -192,38 +193,38 @@ class CapacityReport(ReportGenerator):
             overhead_mem_gib = overhead_mem_total / 1024
             main_totals_cells = [
                 '<th colspan="6">Totals (main containers)</th>',
-                format_cell_with_condition(str(main_cpu_raw), 'CPU_req_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_cpu_lim_raw), 'CPU_lim_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_mem_raw), 'Mem_req_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_mem_lim_raw), 'Mem_lim_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_cpu_total), 'CPU_req_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_cpu_lim_total), 'CPU_lim_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(main_mem_total), 'Mem_req_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(f'{main_mem_lim_total} ({main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
+                format_cell_with_condition(str(main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(main_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(f'{main_mem_lim_total} ({main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
             parts.append('<tr>' + ''.join(main_totals_cells) + '</tr>')
             all_totals_cells = [
                 '<th colspan="6">Totals (all containers incl. init)</th>',
-                format_cell_with_condition(str(all_cpu_raw), 'CPU_req_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_raw), 'CPU_lim_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_raw), 'Mem_req_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_raw), 'Mem_lim_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_total), 'CPU_req_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_total), 'CPU_lim_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_total), 'Mem_req_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(f'{all_mem_lim_total} ({all_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
+                format_cell_with_condition(str(all_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
             parts.append('<tr>' + ''.join(all_totals_cells) + '</tr>')
             overhead_totals_cells = [
                 '<th colspan="6">Overhead (init containers)</th>',
-                format_cell_with_condition(str(all_cpu_raw - main_cpu_raw), 'CPU_req_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_raw - main_cpu_lim_raw), 'CPU_lim_m', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_raw - main_mem_raw), 'Mem_req_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_raw - main_mem_lim_raw), 'Mem_lim_Mi', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(overhead_cpu_total), 'CPU_req_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_total - main_cpu_lim_total), 'CPU_lim_m_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(overhead_mem_total), 'Mem_req_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(f'{all_mem_lim_total - main_mem_lim_total} ({(all_mem_lim_total - main_mem_lim_total)/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'capacity').replace('<td', '<th').replace('</td>', '</th>')
+                format_cell_with_condition(str(all_cpu_raw - main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_cpu_lim_raw - main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_raw - main_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_lim_raw - main_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(overhead_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_cpu_lim_total - main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(overhead_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
+                format_cell_with_condition(str(all_mem_lim_total - main_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
             parts.append('<tr>' + ''.join(overhead_totals_cells) + '</tr>')
         parts.append('</table>')

@@ -69,9 +69,9 @@ logging:
         
         assert result.exit_code == 0
         output = result.output
-        
+
         # Should mention generating each report type
-        assert 'Generating capacity report...' in output
+        assert 'Generating container-capacity report...' in output
         assert 'Generating nodes report...' in output
         assert 'Generating summary report...' in output
         assert 'Generating containers-config report...' in output
@@ -85,7 +85,7 @@ logging:
         assert os.path.exists(reports_dir)
 
         files = os.listdir(reports_dir)
-        report_types = ['capacity', 'nodes', 'summary', 'containers-config', 'cluster-capacity']
+        report_types = ['container-capacity', 'nodes', 'summary', 'containers-config', 'cluster-capacity']
         for report_type in report_types:
             matching_files = [f for f in files if f.startswith(f'{report_type}-')]
             assert len(matching_files) == 1, (
@@ -133,7 +133,7 @@ def test_list_types_includes_all_reports():
     output = result.output
     
     # Should list all current report types
-    assert 'capacity' in output
+    assert 'container-capacity' in output
     assert 'containers-config' in output
     assert 'nodes' in output
     assert 'summary' in output

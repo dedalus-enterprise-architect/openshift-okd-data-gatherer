@@ -146,12 +146,12 @@ logging:
     
     # Generate capacity report
     runner = CliRunner()
-    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'test-cluster', '--type', 'capacity'])
+    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'test-cluster', '--type', 'container-capacity'])
     assert result.exit_code == 0, result.output
     
     # Verify report was generated
     reports_dir = cluster_dir / 'reports'
-    files = list(reports_dir.glob('capacity-*.html'))
+    files = list(reports_dir.glob('container-capacity-*.html'))
     assert files, 'No capacity report produced'
     
     # Verify report content
@@ -210,11 +210,11 @@ logging:
     shutil.copy(str(db_path), cluster_dir / 'data.db')
     
     runner = CliRunner()
-    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'empty-cluster', '--type', 'capacity'])
+    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'empty-cluster', '--type', 'container-capacity'])
     assert result.exit_code == 0, result.output
     
     reports_dir = cluster_dir / 'reports'
-    files = list(reports_dir.glob('capacity-*.html'))
+    files = list(reports_dir.glob('container-capacity-*.html'))
     assert files, 'No capacity report produced'
     
     content = files[0].read_text()
@@ -291,11 +291,11 @@ logging:
     shutil.copy(str(db_path), cluster_dir / 'data.db')
     
     runner = CliRunner()
-    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'calc-test', '--type', 'capacity'])
+    result = runner.invoke(cli, ['--config', str(cfg_path), 'report', '--cluster', 'calc-test', '--type', 'container-capacity'])
     assert result.exit_code == 0, result.output
     
     reports_dir = cluster_dir / 'reports'
-    files = list(reports_dir.glob('capacity-*.html'))
+    files = list(reports_dir.glob('container-capacity-*.html'))
     assert files
     
     content = files[0].read_text()

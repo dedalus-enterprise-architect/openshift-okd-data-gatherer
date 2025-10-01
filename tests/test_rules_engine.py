@@ -54,7 +54,7 @@ class TestRulesEngine:
             'cell_value': '',
             'column_name': 'CPU_req_m',
             'row_data': {},
-            'report_type': 'capacity'
+            'report_type': 'container-capacity'
         }
         result = engine.evaluate_cell(context)
         assert result.rule_type == RuleType.NONE
@@ -68,7 +68,7 @@ class TestRulesEngine:
             'cell_value': '',
             'column_name': 'CPU_req_m',
             'row_data': {},
-            'report_type': 'capacity'
+            'report_type': 'container-capacity'
         }
         result = engine.evaluate_cell(context)
         assert result.rule_type == RuleType.ERROR_MISS
@@ -84,7 +84,7 @@ class TestRulesEngine:
             'cell_value': '',
             'column_name': 'CPU_req_m',
             'row_data': {},
-            'report_type': 'capacity'
+            'report_type': 'container-capacity'
         }
         result = engine.evaluate_cell(context)
         assert result.rule_type == RuleType.ERROR_MISS
@@ -171,7 +171,7 @@ class TestRulesEngineIntegration:
         context = {
             'cell_value': '', 'column_name': 'CPU_req_m', 'row_data': {
                 'Kind': 'Deployment', 'Namespace': 'default', 'Name': 'test-app'
-            }, 'report_type': 'capacity'
+            }, 'report_type': 'container-capacity'
         }
         result = engine.evaluate_cell(context)
         assert result.rule_type == RuleType.ERROR_MISS
@@ -189,7 +189,7 @@ class TestRulesEngineIntegration:
         assert result.matched_rule == 'image_pull_policy_always'
         # Scenario 3
         context = {
-            'cell_value': '500m', 'column_name': 'CPU_req_m', 'row_data': {}, 'report_type': 'capacity'
+            'cell_value': '500m', 'column_name': 'CPU_req_m', 'row_data': {}, 'report_type': 'container-capacity'
         }
         result = engine.evaluate_cell(context)
         assert result.rule_type == RuleType.NONE
@@ -201,7 +201,7 @@ class TestRulesEngineIntegration:
         register_official_rules(registry)
         engine = RulesEngine(registry)
         context = {
-            'cell_value': '', 'column_name': 'CPU_req_m', 'row_data': {}, 'report_type': 'capacity'
+            'cell_value': '', 'column_name': 'CPU_req_m', 'row_data': {}, 'report_type': 'container-capacity'
         }
         r1 = engine.evaluate_cell(context)
         r2 = engine.evaluate_cell(context)

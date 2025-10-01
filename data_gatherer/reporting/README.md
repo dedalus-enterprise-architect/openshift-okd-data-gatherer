@@ -7,8 +7,8 @@ This directory contains report generators for analyzing OpenShift cluster data s
 ### Container Capacity Report (`container-capacity`)
 **Purpose**: Analyze declared CPU/memory requests & limits across controller-managed containers
 **File**: `container_capacity_report.py`
-**Output**: HTML report with resource aggregation tables + per‑namespace & cluster totals
-**Focus**: Allocation patterns, gaps (missing values), and risk indicators (oversized limits, skewed request/limit ratios)
+**Output**: HTML report with resource aggregation tables, per‑namespace and cluster totals
+**Focus**: Allocation patterns, missing values, risk indicators (oversized limits, skewed request/limit ratios)
 **Tests**: `test_container_capacity_report.py`, `test_container_capacity_report_math.py`, `test_container_capacity_report_css.py`
 
 ### Nodes Report (`nodes`)
@@ -41,8 +41,8 @@ This directory contains report generators for analyzing OpenShift cluster data s
 - Memory Requests (Mi) – Σ (replicas × Σ main-container request)
 - CPU Limits (m) – Σ (replicas × Σ main-container limit)
 - Memory Limits (Mi) – Σ (replicas × Σ main-container limit)
-- % Allocatable Cluster CPU – NamespaceRequests ÷ WorkerAllocatable × 100
-- % Allocatable Cluster Memory – NamespaceRequests ÷ WorkerAllocatable × 100
+- % CPU allocated on Cluster – NamespaceRequests ÷ WorkerAllocatable × 100
+- % Memory allocated on Cluster – NamespaceRequests ÷ WorkerAllocatable × 100
 
 **Totals Row:**
 - Aggregated namespace requests & limits (percent uses requests)
@@ -50,7 +50,7 @@ This directory contains report generators for analyzing OpenShift cluster data s
 **Summary Table:**
 - Cluster Worker Allocatable baseline
 - Main Containers Requests
-- Free Allocatable (Allocatable - Requests, clamped at 0)
+- Free resources (Allocatable - Requests, clamped at 0)
 - Main Containers Limits
 
 **Legend & Formulas:**
@@ -65,16 +65,6 @@ This directory contains report generators for analyzing OpenShift cluster data s
 - Only main (regular) containers included (runtime footprint)
 - Limits are shown per-namespace and in totals (not used for % calculations)
 - Allocatable preferred; capacity used only as fallback when allocatable missing
-- Report type name was renamed from `sizing` to `cluster-capacity` (no backward alias)
-
-## Report Layout Standards
-
-All reports follow consistent styling:
-
-- **Legend on top**: Simple, concise legend with small font
-- **Consistent style**: Same font, size, and colors across all reports
-- **Clear sections**: Organized information hierarchy
-- **HTML output**: Web-viewable format for easy sharing
 
 ## Cell Formatting Rules
 

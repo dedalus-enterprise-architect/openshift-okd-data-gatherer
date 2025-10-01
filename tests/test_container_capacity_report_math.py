@@ -143,10 +143,10 @@ def test_container_capacity_report_math(tmp_path):
     cfg_path = _cfg(tmp_path, 'math-cluster')
 
     runner = CliRunner()
-    result = runner.invoke(cli, ['--config', cfg_path, 'report', '--cluster', 'math-cluster', '--type', 'capacity'])
+    result = runner.invoke(cli, ['--config', cfg_path, 'report', '--cluster', 'math-cluster', '--type', 'container-capacity'])
     assert result.exit_code == 0, result.output
 
-    report_files = list((cluster_dir / 'reports').glob('capacity-*.html'))
+    report_files = list((cluster_dir / 'reports').glob('container-capacity-*.html'))
     assert report_files, 'Capacity report not generated.'
     html = report_files[0].read_text()
 

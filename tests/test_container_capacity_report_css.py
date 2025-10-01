@@ -87,11 +87,11 @@ def test_container_capacity_report_css_classes(tmp_path):
     cfg_path = _write_config(tmp_path, 'css-cluster')
 
     runner = CliRunner()
-    result = runner.invoke(cli, ['--config', cfg_path, 'report', '--cluster', 'css-cluster', '--type', 'capacity'])
+    result = runner.invoke(cli, ['--config', cfg_path, 'report', '--cluster', 'css-cluster', '--type', 'container-capacity'])
     assert result.exit_code == 0, result.output
 
     reports_dir = cluster_dir / 'reports'
-    files = list(reports_dir.glob('capacity-*.html'))
+    files = list(reports_dir.glob('container-capacity-*.html'))
     assert files, 'No capacity report produced'
 
     content = files[0].read_text()
