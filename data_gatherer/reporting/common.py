@@ -218,19 +218,18 @@ def format_cell_with_condition(value: str, column_name: str, row_data: Optional[
     # If rule result includes a message or matched_rule, expose it as an HTML data attribute
     tooltip_text = ''
     if result and (result.message or result.matched_rule):
-        tooltip_text = result.message or result.matched_rule or ''
+        tooltip_text = result.message or result.matched_rule
         tooltip_text = html.escape(str(tooltip_text))
 
-    data_attr = f' data-tooltip="{tooltip_text}"' if tooltip_text else ''
-    title_attr = f' title="{tooltip_text}"' if tooltip_text else ''
-
+    attrs = ''
+    if tooltip_text:
+        attrs = f' data-tooltip="{tooltip_text}" title="{tooltip_text}"'
     if css_class:
         # preserve css_class verbatim
-        return f'<td class="{css_class}"{data_attr}{title_attr}>{escaped_value}</td>'
-    else:
-        if tooltip_text:
-            return f'<td{data_attr}{title_attr}>{escaped_value}</td>'
-        return f'<td>{escaped_value}</td>'
+        return f'<td class="{css_class}"{attrs}>{escaped_value}</td>'
+    if attrs:
+        return f'<td{attrs}>{escaped_value}</td>'
+    return f'<td>{escaped_value}</td>'
 
 
 def wrap_html_document(title: str, content_parts: List[str], additional_css: str = "") -> str:
