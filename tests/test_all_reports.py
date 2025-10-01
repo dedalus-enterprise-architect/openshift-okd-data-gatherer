@@ -75,20 +75,22 @@ logging:
         assert 'Generating nodes report...' in output
         assert 'Generating summary report...' in output
         assert 'Generating containers-config report...' in output
-        
+        assert 'Generating cluster-capacity report...' in output
+
         # Should show successful generation
-        assert 'Generated 4 reports successfully.' in output
-        
+        assert 'Generated 5 reports successfully.' in output
+
         # Verify report files were created
         reports_dir = os.path.join(tmp_dir, 'test-cluster', 'reports')
         assert os.path.exists(reports_dir)
-        
+
         files = os.listdir(reports_dir)
-        report_types = ['capacity', 'nodes', 'summary', 'containers-config']
-        
+        report_types = ['capacity', 'nodes', 'summary', 'containers-config', 'cluster-capacity']
         for report_type in report_types:
             matching_files = [f for f in files if f.startswith(f'{report_type}-')]
-            assert len(matching_files) == 1, f"Expected 1 {report_type} report file, found {len(matching_files)}: {matching_files}"
+            assert len(matching_files) == 1, (
+                f"Expected 1 {report_type} report file, found {len(matching_files)}: {matching_files}"
+            )
 
 
 def test_report_all_flag_validation():
@@ -135,3 +137,4 @@ def test_list_types_includes_all_reports():
     assert 'containers-config' in output
     assert 'nodes' in output
     assert 'summary' in output
+    assert 'cluster-capacity' in output
