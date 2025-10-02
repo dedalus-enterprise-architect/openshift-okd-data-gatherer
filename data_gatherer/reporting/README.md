@@ -2,69 +2,18 @@
 
 This directory contains report generators for analyzing OpenShift cluster data snapshots. Reports provide capacity analysis and workload configuration insights based on the current cluster state.
 
+
 ## Available Reports
 
-### Container Capacity Report (`container-capacity`)
-**Purpose**: Analyze declared CPU/memory requests & limits across controller-managed containers
-**File**: `container_capacity_report.py`
-**Output**: HTML report with resource aggregation tables, per‑namespace and cluster totals
-**Focus**: Allocation patterns, missing values, risk indicators (oversized limits, skewed request/limit ratios)
-**Tests**: `test_container_capacity_report.py`, `test_container_capacity_report_math.py`, `test_container_capacity_report_css.py`
+| Report Type            | File                          | Output Format | Purpose/Focus                                                                 |
+|------------------------|-------------------------------|--------------|------------------------------------------------------------------------------|
+| summary                | summary_report.py             | HTML         | High-level cluster overview, workload counts, node info                       |
+| container-capacity     | container_capacity_report.py  | HTML, Excel  | Per-container resource requests/limits, allocation patterns, risk indicators   |
+| cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Namespace/cluster-level resource demand, allocatable vs requested, hotspots    |
+| containers-config      | containers_config_report.py   | HTML         | Detailed container configuration, compliance, optimization recommendations    |
+| nodes                  | nodes_report.py               | HTML         | Node details, infrastructure capacity overview                                |
 
-### Nodes Report (`nodes`)
-- **Purpose**: Display cluster node information and capacity
-- **File**: `nodes_report.py`
-- **Output**: HTML report with node details and resource capacity
-- **Focus**: Infrastructure capacity overview
-
-### Summary Report (`summary`)
-- **Purpose**: High-level cluster overview
-- **File**: `summary_report.py`
-- **Output**: HTML summary with workload counts and node information
-- **Focus**: Quick cluster health snapshot
-
-### Container Configuration Report (`containers-config`)
-- **Purpose**: Detailed container configuration analysis
-- **File**: `containers_config_report.py`
-- **Output**: HTML report with container settings and best practices
-- **Focus**: Configuration compliance and optimization recommendations
-
-### Cluster Capacity Report (`cluster-capacity`)
-**Purpose**: High-level namespace resource demand vs cluster worker allocatable capacity
-**File**: `cluster_capacity_report.py`
-**Output**: HTML table: per-namespace CPU/Memory requests & limits (main containers only), % of worker allocatable, totals row, and summary table with free allocatable resources
-**Focus**: Detect hotspots / over-allocation risk using only current snapshot (no historical trends)
-
-**Table Columns:**
-- Namespace
-- CPU Requests (m) – Σ (replicas × Σ main-container request)
-- Memory Requests (Mi) – Σ (replicas × Σ main-container request)
-- CPU Limits (m) – Σ (replicas × Σ main-container limit)
-- Memory Limits (Mi) – Σ (replicas × Σ main-container limit)
-- % CPU allocated on Cluster – NamespaceRequests ÷ WorkerAllocatable × 100
-- % Memory allocated on Cluster – NamespaceRequests ÷ WorkerAllocatable × 100
-
-**Totals Row:**
-- Aggregated namespace requests & limits (percent uses requests)
-
-**Summary Table:**
-- Cluster Worker Allocatable baseline
-- Main Containers Requests
-- Free resources (Allocatable - Requests, clamped at 0)
-- Main Containers Limits
-
-**Legend & Formulas:**
-- NamespaceCPURequests = Σ_workloads ( replicas × Σ_mainContainers cpu_request_m )
-- NamespaceMemoryRequests = Σ_workloads ( replicas × Σ_mainContainers memory_request_Mi )
-- ClusterAllocatableCPU = Σ_workers allocatable_cpu_m (capacity fallback)
-- CPU% = NamespaceCPURequests / ClusterAllocatableCPU × 100
-- FreeCPU = max(0, ClusterAllocatableCPU - TotalCPURequests)
-- Same pattern for Memory metrics
-
-**Notes:**
-- Only main (regular) containers included (runtime footprint)
-- Limits are shown per-namespace and in totals (not used for % calculations)
-- Allocatable preferred; capacity used only as fallback when allocatable missing
+---
 
 ## Cell Formatting Rules
 

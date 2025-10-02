@@ -1,14 +1,13 @@
 # OpenShift Data Gatherer
 
-End‑user tool to take a clean snapshot of workload controller manifests and node capacity from one or more OpenShift clusters, then produce concise HTML reports for capacity planning and configuration auditing. It intentionally skips live Pod objects: the focus is sizing, configuration consistency, and inventory – not runtime metrics.
+
+OpenShift Data Gatherer is a snapshot tool for collecting controller manifests and node capacity from OpenShift clusters. It produces concise reports for capacity planning and configuration auditing. The focus is on sizing, configuration consistency, and inventory—not live metrics.
 
 ---
 ## 1. What You Get
 * A repeatable snapshot (current state only) of selected workload kinds and nodes
-* Fast, parallel collection with namespace filtering
-* Deterministic normalized manifests (stable for diffing outside this tool)
-* Lightweight on-cluster access (read‑only RBAC provided)
-* HTML reports (summary, capacity, nodes, container configuration) with a unified severity legend (missing vs misconfiguration) for quick visual scanning
+* Reports in HTML and Excel formats with hints
+* Only first sync requires a connection to target cluster
 
 The database always reflects the latest sync; removed objects disappear automatically (no history retention/purging to manage).
 
@@ -16,11 +15,12 @@ The database always reflects the latest sync; removed objects disappear automati
 ## 2. Typical Use Cases
 | Goal | How |
 |------|-----|
-| Get an inventory of controllers & their specs | Run `sync`, then `report --type summary` |
-| Understand total requested vs limited CPU/RAM | `report --type capacity` |
+| Get an inventory of controllers & specs | Run `sync`, then `report --type summary` |
+| See requested vs limited CPU/RAM (per container) | `report --type container-capacity` |
+| See namespace/cluster-level resource demand | `report --type cluster-capacity` |
 | Audit container configuration & missing requests/limits | `report --type containers-config` |
-| Inspect node sizing and available capacity snapshot | `nodes` command or `report --type nodes` |
-| Quickly onboard multiple clusters | Add entries to `config/config.yaml`, run `init` + `sync` per cluster |
+| Inspect node sizing and available capacity | `nodes` command or `report --type nodes` |
+| Onboard multiple clusters | Add entries to `config/config.yaml`, run `init` + `sync` per cluster |
 
 ---
 ## 3. Quick Start
@@ -33,102 +33,61 @@ The database always reflects the latest sync; removed objects disappear automati
 7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
 8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
 9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.
-10. Open the HTML files in `clusters/my-cluster/reports/`.
 
-Compact first run (single cluster):
+10. Open the reports in `clusters/my-cluster/reports/` (HTML) or your chosen output path (Excel).
+
+
+
+### Quick Start Example
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp config/example-config.yaml config/config.yaml  # edit it now
-python -m data_gatherer.run init --cluster my-cluster \
-	&& python -m data_gatherer.run sync --cluster my-cluster \
-	&& python -m data_gatherer.run report --cluster my-cluster --all
+python -m data_gatherer.run init --cluster my-cluster
+python -m data_gatherer.run sync --cluster my-cluster
+python -m data_gatherer.run report --cluster my-cluster --all
 # Open clusters/my-cluster/reports/*.html
 ```
 
-### Basic Usage Example (Single Cluster)
+### Basic Usage
+Initialize storage:
 ```bash
-# Setup
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Configure your cluster (edit config/config.yaml with your cluster details)
-cp config/example-config.yaml config/config.yaml
-
-# Initialize and sync data for one cluster
 python -m data_gatherer.run init --cluster my-cluster
+```
+Sync cluster data:
+```bash
 python -m data_gatherer.run sync --cluster my-cluster
-
-# Generate all reports for that cluster
+```
+Generate all reports:
+```bash
 python -m data_gatherer.run report --cluster my-cluster --all
-
-# View the reports
-# Reports will be in: clusters/my-cluster/reports/
 ```
-
-### Multi‑Cluster Examples
+Generate a specific report in Excel format:
 ```bash
-# Initialize every cluster defined in config
-python -m data_gatherer.run init --all-clusters
-
-# Sync a subset of clusters in one call
-python -m data_gatherer.run sync --cluster prod --cluster staging
-
-# Sync all clusters (parallel per kind inside each cluster)
-python -m data_gatherer.run sync --all-clusters
-
-# Generate ALL report types for all clusters
-python -m data_gatherer.run report --all-clusters --all
-
-# Generate only capacity report for two clusters
-python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
-
-# Show status for all configured clusters
-python -m data_gatherer.run status --all-clusters
-
-# List nodes (snapshot) for several clusters
-python -m data_gatherer.run nodes --cluster prod --cluster staging
+python -m data_gatherer.run report --cluster my-cluster --type container-capacity --format excel --out /tmp/container_report.xlsx
 ```
-
-### Additional Usage Patterns (Legacy single-cluster style)
+List node capacity:
 ```bash
-# Daily capacity review (single cluster)
-python -m data_gatherer.run sync --cluster prod
-python -m data_gatherer.run report --cluster prod --type capacity
-
-# Configuration audit across multiple clusters (single command now)
-python -m data_gatherer.run report --cluster prod --cluster staging --type containers-config
-
-# Quick multi-cluster inventory
-python -m data_gatherer.run status --all-clusters
-python -m data_gatherer.run nodes --all-clusters
-
-# Generate specific reports only
-python -m data_gatherer.run report --cluster prod --type summary
-python -m data_gatherer.run report --cluster prod --type nodes
+python -m data_gatherer.run nodes --cluster my-cluster
 ```
 
 ---
-## 4. Configuration Essentials
-Create `config/config.yaml`. Each cluster entry chooses ONE authentication method: kubeconfig, direct service account token, or client certificate.
+## 4. Supported Resource Kinds
+The following Kubernetes/OpenShift resource kinds are supported for snapshot and reporting:
 
-**Authentication Methods:**
+- Deployment
+- StatefulSet
+- DaemonSet
+- Job
+- CronJob
+- DeploymentConfig
+- BuildConfig
+- Node
 
-1. **Kubeconfig** - Uses existing kubectl configuration
-2. **Service Account Token** - Direct token authentication with host/token/ca_file
-3. **Client Certificate** - Mutual TLS with cert_file/key_file/ca_file
+---
 
-**Key Configuration Fields:**
-* include_kinds – only collect what you need (include `Node` for node sizing)
-* ignore_system_namespaces – auto‑skip common system namespaces
-* exclude_namespaces – add exact names or wildcards like `sandbox-*`
-* parallelism – adjust concurrency (API friendly default `4`)
-* write_manifest_files – set to false if you only want the DB + reports
-
-Supported kinds (may safely subset): Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, BuildConfig, Node.
-
-See `config/example-config.yaml` for a concrete template covering kubeconfig and token-based authentication patterns; adapt it rather than copying snippets from this document.
+## 4. Configuration
+See `config/README.md` for configuration instructions, authentication methods, and example templates.
 
 ---
 ## 5. RBAC (One-Time Cluster Prep)
@@ -185,46 +144,22 @@ List supported kinds & API group.
 python -m data_gatherer.run kinds
 ```
 
-### `report`
-Generate HTML reports per cluster.
-```bash
-# Single cluster, one report
-python -m data_gatherer.run report --cluster prod --type capacity
-
-# Single cluster, every report type
-python -m data_gatherer.run report --cluster prod --all
-
-# Multi-cluster, capacity only
-python -m data_gatherer.run report --cluster prod --cluster staging --type capacity
-
-# All clusters, all report types
-python -m data_gatherer.run report --all-clusters --all
-```
-Options:
-- `--type NAME` – One of: summary, capacity, nodes, containers-config (default: summary)
-- `--all` – Generate every available type (ignores `--type`)
-- `--out PATH` – Explicit file path (single-cluster only)
-- `--list-types` – Show available report types then exit
-
-Typical flow: `init --all-clusters` → periodic `sync --all-clusters` → `report --all-clusters --all` when you need fresh HTML.
-
----
-## 7. Reports Overview (Summary Only)
-Available HTML report types provide inventory, capacity aggregation, container configuration auditing, and node sizing snapshots. Each report includes a concise legend with severity categories (ERROR_MISS, WARNING_MISS, ERROR_MISCONF, WARNING_MISCONF) and automatic highlighting for missing or risky configuration.
-
-Full descriptions, use cases, highlighting meanings, and filename conventions are documented in `data_gatherer/reporting/README.md`.
 
 
+### Report Types
+Use `python -m data_gatherer.run report --list-types` to see all available types.
+For detailed descriptions of each report, output formats, and legend, see `data_gatherer/reporting/README.md`.
 
----
+
 ## 8. Node Sizing Snapshot
-Include `Node` in `include_kinds` to capture per-node capacity + allocatable plus basic attributes (roles, instance type, zone). View with the `nodes` command or nodes report. This is a point‑in‑time view (no historical trend retention).
+Include `Node` in `include_kinds` to capture per-node capacity and attributes. View with the `nodes` command or nodes report. This is a point-in-time view.
 
 ---
+
 ## 9. Operational Tips
-* Re-run `sync` any time – it replaces previous data safely.
-* Removing a kind from `include_kinds` will cause its historical rows to be cleaned during the next sync.
-* If a cluster is unreachable, previously synced kinds stay until successfully re-synced or removed from config.
+* Re-run `sync` any time—it safely replaces previous data.
+* Removing a kind from `include_kinds` will clean its rows on next sync.
+* If a cluster is unreachable, previously synced kinds stay until re-synced or removed.
 * Reduce `include_kinds` if API rate limits or large clusters slow collection.
 
 Troubleshooting:
@@ -233,15 +168,17 @@ Troubleshooting:
 * Missing reports directory → generate at least one report; it will be created automatically.
 
 ---
+
 ## 10. Security & Safety
-* Prefer a dedicated service account with the provided read‑only role.
+* Use a dedicated service account with the provided read-only role.
 * Keep `verify_ssl: true`; only disable temporarily for initial testing.
 
 ---
-## 11. Frequently Asked (FAQ)
-**Does it show real-time usage?** No. It shows declared requests/limits and node capacity only.
 
-**Can I add custom resource kinds?** Limit to the listed supported kinds for now; trimming the list is safe.
+## 11. FAQ
+**Does it show real-time usage?** No, only declared requests/limits and node capacity.
+
+**Can I add custom resource kinds?** Limit to the listed supported kinds for now.
 
 **Where are raw manifests?** Under `clusters/<cluster>/manifests/<Kind>/` unless `write_manifest_files: false`.
 

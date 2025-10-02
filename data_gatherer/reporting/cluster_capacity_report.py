@@ -1,6 +1,6 @@
 from __future__ import annotations
 import html
-from typing import List, Dict
+from typing import List, Dict, Any, Tuple, Optional
 from .base import ReportGenerator, register
 from ..persistence.db import WorkloadDB
 from ..persistence.workload_queries import WorkloadQueries
@@ -13,7 +13,184 @@ from .common import (
 
 @register
 class ClusterCapacityReport(ReportGenerator):
-	def _generate_excel(self, db: WorkloadDB, cluster: str, out_path: str) -> None:
+	"""
+	Generate cluster capacity reports showing namespace-level resource aggregation.
+	
+	Supports multiple output formats and provides cluster-wide capacity analysis
+	with namespace breakdowns and worker node utilization metrics.
+	"""
+	type_name = 'cluster-capacity'
+	file_extension = '.html'
+	filename_prefix = 'cluster-capacity-'
+	supported_formats = ['html', 'excel']
+
+	def generate(self, db: WorkloadDB, cluster: str, out_path: str, format: str = 'html') -> None:
+		"""
+		Generate cluster capacity report in specified format.
+		
+		Args:
+			db: Database connection for workload queries
+			cluster: Target cluster name
+			out_path: Output file path
+			format: Output format ('html' or 'excel')
+		"""
+		# Generate format-agnostic data
+		capacity_data = self._generate_capacity_data(db, cluster)
+		title = f"Cluster Capacity Report: {cluster}"
+		
+		if format.lower() == 'excel':
+			self._generate_excel_report(title, capacity_data, out_path)
+		else:
+			# Default to HTML
+			html_content = self._generate_html_report(title, capacity_data, cluster)
+			with open(out_path, 'w', encoding='utf-8') as f:
+				f.write(html_content)
+
+	def _generate_capacity_data(self, db: WorkloadDB, cluster: str) -> Dict[str, Any]:
+		"""
+		Generate core capacity data structure used by all output formats.
+		
+		Args:
+			db: Database connection
+			cluster: Cluster name
+			
+		Returns:
+			Dictionary containing namespace totals, node capacity, and summary data
+		"""
+		# Process workload data
+		ns_totals = self._process_namespace_totals(db, cluster)
+		
+		# Get node capacity information
+		node_capacity = self._get_node_capacity(db, cluster)
+		
+		# Calculate summary totals
+		summary_totals = self._calculate_summary_totals(ns_totals)
+		
+		return {
+			'ns_totals': ns_totals,
+			'node_capacity': node_capacity,
+			'summary_totals': summary_totals
+		}
+
+	def _process_namespace_totals(self, db: WorkloadDB, cluster: str) -> Dict[str, Dict[str, int]]:
+		"""
+		Process workload data to generate namespace-level resource totals.
+		
+		Args:
+			db: Database connection
+			cluster: Cluster name
+			
+		Returns:
+			Dictionary mapping namespace names to resource totals
+		"""
+		wq = WorkloadQueries(db)
+		rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
+		
+		ns_totals: Dict[str, Dict[str, int]] = {}
+		
+		for rec in rows:
+			namespace = rec['namespace'] or '<cluster-scoped>'
+			manifest = rec['manifest']
+			kind = rec['kind']
+			
+			pod_spec = extract_pod_spec(kind, manifest)
+			if not pod_spec:
+				continue
+				
+			replicas = get_replicas_for_workload(kind, manifest) or 1
+			ns_totals.setdefault(namespace, {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0})
+			
+			for cdef in pod_spec.get('containers', []):
+				self._process_container_resources(cdef, replicas, ns_totals[namespace])
+		
+		return ns_totals
+
+	def _process_container_resources(self, cdef: Dict[str, Any], replicas: int, ns_total: Dict[str, int]) -> None:
+		"""
+		Process individual container resource requirements into namespace totals.
+		
+		Args:
+			cdef: Container definition from pod spec
+			replicas: Number of replicas for the workload
+			ns_total: Namespace totals dictionary to update
+		"""
+		res = cdef.get('resources', {})
+		req = res.get('requests', {}) or {}
+		lim = res.get('limits', {}) or {}
+		
+		cpu_req = cpu_to_milli(req.get('cpu')) or 0
+		mem_req = mem_to_mi(req.get('memory')) or 0
+		cpu_lim = cpu_to_milli(lim.get('cpu')) or 0
+		mem_lim = mem_to_mi(lim.get('memory')) or 0
+		
+		if cpu_req:
+			ns_total['cpu'] += cpu_req * replicas
+		if mem_req:
+			ns_total['mem'] += mem_req * replicas
+		if cpu_lim:
+			ns_total['cpu_lim'] += cpu_lim * replicas
+		if mem_lim:
+			ns_total['mem_lim'] += mem_lim * replicas
+
+	def _get_node_capacity(self, db: WorkloadDB, cluster: str) -> Dict[str, int]:
+		"""
+		Retrieve and aggregate worker node capacity information.
+		
+		Args:
+			db: Database connection
+			cluster: Cluster name
+			
+		Returns:
+			Dictionary with total CPU and memory allocatable/capacity
+		"""
+		try:
+			cur = db._conn.cursor()
+			node_rows = cur.execute(
+				"""SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity
+				   FROM node_capacity
+				   WHERE cluster=? AND deleted=0 AND node_role='worker'""",
+				(cluster,)
+			).fetchall()
+		except Exception:
+			node_rows = []
+
+		total_cpu_alloc = total_mem_alloc = 0
+		
+		for cpu_alloc, mem_alloc, cpu_cap, mem_cap in node_rows:
+			total_cpu_alloc += (cpu_to_milli(cpu_alloc) or cpu_to_milli(cpu_cap) or 0)
+			total_mem_alloc += (mem_to_mi(mem_alloc) or mem_to_mi(mem_cap) or 0)
+
+		return {
+			'total_cpu_alloc': total_cpu_alloc,
+			'total_mem_alloc': total_mem_alloc
+		}
+
+	def _calculate_summary_totals(self, ns_totals: Dict[str, Dict[str, int]]) -> Dict[str, int]:
+		"""
+		Calculate cluster-wide summary totals from namespace data.
+		
+		Args:
+			ns_totals: Namespace totals dictionary
+			
+		Returns:
+			Dictionary with cluster-wide totals
+		"""
+		return {
+			'total_req_cpu': sum(v['cpu'] for v in ns_totals.values()),
+			'total_req_mem': sum(v['mem'] for v in ns_totals.values()),
+			'total_lim_cpu': sum(v['cpu_lim'] for v in ns_totals.values()),
+			'total_lim_mem': sum(v['mem_lim'] for v in ns_totals.values())
+		}
+
+	def _generate_excel_report(self, title: str, capacity_data: Dict[str, Any], out_path: str) -> None:
+		"""
+		Generate Excel report from processed capacity data.
+		
+		Args:
+			title: Report title
+			capacity_data: Processed capacity data
+			out_path: Output file path
+		"""
 		try:
 			from openpyxl import Workbook
 			from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
@@ -21,47 +198,13 @@ class ClusterCapacityReport(ReportGenerator):
 		except ImportError as e:
 			raise ImportError("openpyxl is required for Excel output. Install with: pip install openpyxl") from e
 
-		wq = WorkloadQueries(db)
-		rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
-
-		ns_totals: Dict[str, Dict[str, int]] = {}
-		for rec in rows:
-			namespace = rec['namespace'] or '<cluster-scoped>'
-			manifest = rec['manifest']
-			kind = rec['kind']
-			pod_spec = extract_pod_spec(kind, manifest)
-			if not pod_spec:
-				continue
-			replicas = get_replicas_for_workload(kind, manifest) or 1
-			ns_totals.setdefault(namespace, {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0})
-			for cdef in pod_spec.get('containers', []):
-				res = cdef.get('resources', {})
-				req = res.get('requests', {}) or {}
-				lim = res.get('limits', {}) or {}
-				cpu_req = cpu_to_milli(req.get('cpu')) or 0
-				mem_req = mem_to_mi(req.get('memory')) or 0
-				cpu_lim = cpu_to_milli(lim.get('cpu')) or 0
-				mem_lim = mem_to_mi(lim.get('memory')) or 0
-				if cpu_req:
-					ns_totals[namespace]['cpu'] += cpu_req * replicas
-				if mem_req:
-					ns_totals[namespace]['mem'] += mem_req * replicas
-				if cpu_lim:
-					ns_totals[namespace]['cpu_lim'] += cpu_lim * replicas
-				if mem_lim:
-					ns_totals[namespace]['mem_lim'] += mem_lim * replicas
-
-		cur = db._conn.cursor()
-		node_rows = cur.execute(
-			"""SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity
-			   FROM node_capacity
-			   WHERE cluster=? AND deleted=0 AND node_role='worker'""",
-			(cluster,)
-		).fetchall()
-		total_cpu_alloc = total_mem_alloc = 0
-		for cpu_alloc, mem_alloc, cpu_cap, mem_cap in node_rows:
-			total_cpu_alloc += (cpu_to_milli(cpu_alloc) or cpu_to_milli(cpu_cap) or 0)
-			total_mem_alloc += (mem_to_mi(mem_alloc) or mem_to_mi(mem_cap) or 0)
+		# Extract data from processed capacity data
+		ns_totals = capacity_data['ns_totals']
+		node_capacity = capacity_data['node_capacity']
+		summary_totals = capacity_data['summary_totals']
+		
+		total_cpu_alloc = node_capacity['total_cpu_alloc']
+		total_mem_alloc = node_capacity['total_mem_alloc']
 
 		wb = Workbook()
 		ws = wb.active
@@ -81,7 +224,7 @@ class ClusterCapacityReport(ReportGenerator):
 		# Title
 		ws.merge_cells('A1:G1')
 		title_cell = ws['A1']
-		title_cell.value = f"Cluster Capacity Report: {cluster}"
+		title_cell.value = title
 		title_cell.font = Font(bold=True, size=16)
 		title_cell.alignment = Alignment(horizontal="center")
 
@@ -164,10 +307,10 @@ class ClusterCapacityReport(ReportGenerator):
 			cell.alignment = Alignment(horizontal="center")
 		current_row += 1
 
-		total_req_cpu = sum(v['cpu'] for v in ns_totals.values())
-		total_req_mem = sum(v['mem'] for v in ns_totals.values())
-		total_lim_cpu = sum(v['cpu_lim'] for v in ns_totals.values())
-		total_lim_mem = sum(v['mem_lim'] for v in ns_totals.values())
+		total_req_cpu = summary_totals['total_req_cpu']
+		total_req_mem = summary_totals['total_req_mem']
+		total_lim_cpu = summary_totals['total_lim_cpu']
+		total_lim_mem = summary_totals['total_lim_mem']
 
 		def _pct(v: int, d: int) -> str:
 			return 'N/A' if d <= 0 else f"{v / d * 100:.1f}%"
@@ -204,58 +347,27 @@ class ClusterCapacityReport(ReportGenerator):
 
 		wb.save(out_path)
 
-	type_name = 'cluster-capacity'
-	file_extension = '.html'
-	filename_prefix = 'cluster-capacity-'
-	supported_formats = ['html', 'excel']
 
-	def generate(self, db: WorkloadDB, cluster: str, out_path: str, format: str = 'html') -> None:
-		if format.lower() == 'excel':
-			self._generate_excel(db, cluster, out_path)
-		else:
-			self._generate_html(db, cluster, out_path)
 
-	def _generate_html(self, db: WorkloadDB, cluster: str, out_path: str) -> None:
-		wq = WorkloadQueries(db)
-		rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
-		ns_totals: Dict[str, Dict[str, int]] = {}
-		for rec in rows:
-			namespace = rec['namespace'] or '<cluster-scoped>'
-			manifest = rec['manifest']
-			kind = rec['kind']
-			pod_spec = extract_pod_spec(kind, manifest)
-			if not pod_spec:
-				continue
-			replicas = get_replicas_for_workload(kind, manifest) or 1
-			ns_totals.setdefault(namespace, {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0})
-			for cdef in pod_spec.get('containers', []):
-				res = cdef.get('resources', {})
-				req = res.get('requests', {}) or {}
-				lim = res.get('limits', {}) or {}
-				cpu_req = cpu_to_milli(req.get('cpu')) or 0
-				mem_req = mem_to_mi(req.get('memory')) or 0
-				cpu_lim = cpu_to_milli(lim.get('cpu')) or 0
-				mem_lim = mem_to_mi(lim.get('memory')) or 0
-				if cpu_req:
-					ns_totals[namespace]['cpu'] += cpu_req * replicas
-				if mem_req:
-					ns_totals[namespace]['mem'] += mem_req * replicas
-				if cpu_lim:
-					ns_totals[namespace]['cpu_lim'] += cpu_lim * replicas
-				if mem_lim:
-					ns_totals[namespace]['mem_lim'] += mem_lim * replicas
-
-		cur = db._conn.cursor()
-		node_rows = cur.execute(
-			"""SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity
-			   FROM node_capacity
-			   WHERE cluster=? AND deleted=0 AND node_role='worker'""",
-			(cluster,)
-		).fetchall()
-		total_cpu_alloc = total_mem_alloc = 0
-		for cpu_alloc, mem_alloc, cpu_cap, mem_cap in node_rows:
-			total_cpu_alloc += (cpu_to_milli(cpu_alloc) or cpu_to_milli(cpu_cap) or 0)
-			total_mem_alloc += (mem_to_mi(mem_alloc) or mem_to_mi(mem_cap) or 0)
+	def _generate_html_report(self, title: str, capacity_data: Dict[str, Any], cluster: str) -> str:
+		"""
+		Generate HTML report from processed capacity data.
+		
+		Args:
+			title: Report title
+			capacity_data: Processed capacity data
+			cluster: Cluster name
+			
+		Returns:
+			Complete HTML document as string
+		"""
+		# Extract data from processed capacity data
+		ns_totals = capacity_data['ns_totals']
+		node_capacity = capacity_data['node_capacity']
+		summary_totals = capacity_data['summary_totals']
+		
+		total_cpu_alloc = node_capacity['total_cpu_alloc']
+		total_mem_alloc = node_capacity['total_mem_alloc']
 
 		table = [
 			'<table border=1 cellpadding=4 cellspacing=0>',
@@ -285,10 +397,10 @@ class ClusterCapacityReport(ReportGenerator):
 				)
 			# Totals row summarizing all namespaces
 			if ns_totals:
-				all_req_cpu = sum(v['cpu'] for v in ns_totals.values())
-				all_req_mem = sum(v['mem'] for v in ns_totals.values())
-				all_lim_cpu = sum(v['cpu_lim'] for v in ns_totals.values())
-				all_lim_mem = sum(v['mem_lim'] for v in ns_totals.values())
+				all_req_cpu = summary_totals['total_req_cpu']
+				all_req_mem = summary_totals['total_req_mem']
+				all_lim_cpu = summary_totals['total_lim_cpu']
+				all_lim_mem = summary_totals['total_lim_mem']
 				cpu_pct_total = f"{all_req_cpu / total_cpu_alloc * 100:.1f}%" if total_cpu_alloc else 'N/A'
 				mem_pct_total = f"{all_req_mem / total_mem_alloc * 100:.1f}%" if total_mem_alloc else 'N/A'
 				table.append(
@@ -301,10 +413,10 @@ class ClusterCapacityReport(ReportGenerator):
 				)
 		table.append('</table>')
 
-		total_req_cpu = sum(v['cpu'] for v in ns_totals.values())
-		total_req_mem = sum(v['mem'] for v in ns_totals.values())
-		total_lim_cpu = sum(v['cpu_lim'] for v in ns_totals.values())
-		total_lim_mem = sum(v['mem_lim'] for v in ns_totals.values())
+		total_req_cpu = summary_totals['total_req_cpu']
+		total_req_mem = summary_totals['total_req_mem']
+		total_lim_cpu = summary_totals['total_lim_cpu']
+		total_lim_mem = summary_totals['total_lim_mem']
 
 		def _pct(v: int, d: int) -> str:
 			return 'N/A' if d <= 0 else f"{v / d * 100:.1f}%"
@@ -355,11 +467,9 @@ class ClusterCapacityReport(ReportGenerator):
 			}
 		]
 		legend_html = build_legend_html(legend_sections)
-		html_out = wrap_html_document(
-			f'Cluster Capacity Report: {html.escape(cluster)}',
+		return wrap_html_document(
+			title,
 			[legend_html, '<h2>Requests and Limits per namespace</h2>', *table,
 			 '<h2>Container Requests vs Allocatable resources on Worker Nodes</h2>', *totals_table]
 		)
-		with open(out_path, 'w', encoding='utf-8') as f:
-			f.write(html_out)
 
