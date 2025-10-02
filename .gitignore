@@ -70,6 +70,7 @@ config/config.yaml
 !.github/**/*.yaml
 .copilot-tracking/
 .github/instructions/
+.github/chatmodes/
 
 # Data directories
 clusters/
