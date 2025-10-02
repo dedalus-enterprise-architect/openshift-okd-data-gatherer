@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Dict, Type
+from typing import Dict, Type, List
 
 
 class ReportGenerator(ABC):
@@ -15,9 +15,11 @@ class ReportGenerator(ABC):
     file_extension: str
     # Default filename prefix (before timestamp) for auto output naming
     filename_prefix: str = 'report-'
+    # Supported output formats (default: ['html'])
+    supported_formats: List[str] = ['html']
 
     @abstractmethod
-    def generate(self, db, cluster: str, out_path: str) -> None:  # pragma: no cover - interface
+    def generate(self, db, cluster: str, out_path: str, format: str = 'html') -> None:  # pragma: no cover - interface
         pass
 
 
