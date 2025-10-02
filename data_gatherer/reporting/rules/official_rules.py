@@ -11,7 +11,7 @@ class MissingCpuRequestRule(Rule):
         return 'CPU_req' in column_name or ('cpu' in column_name.lower() and 'req' in column_name.lower())
     def evaluate(self, context: Dict[str, Any]) -> RuleResult:
         cell_value = context.get('cell_value', '')
-        if not cell_value or cell_value in ['-', 'N/A', 'None', '0', '0m']:
+        if not cell_value or str(cell_value).strip() in ['', '-', 'N/A', 'None']:
             return RuleResult(RuleType.ERROR_MISS, message="Missing CPU request value", matched_rule=self.name)
         return RuleResult(RuleType.NONE)
 
@@ -24,7 +24,7 @@ class MissingMemoryRequestRule(Rule):
         return 'Mem_req' in column_name or ('mem' in column_name.lower() and 'req' in column_name.lower())
     def evaluate(self, context: Dict[str, Any]) -> RuleResult:
         cell_value = context.get('cell_value', '')
-        if not cell_value or cell_value in ['-', 'N/A', 'None', '0', '0Mi', '0MiB']:
+        if not cell_value or str(cell_value).strip() in ['', '-', 'N/A', 'None']:
             return RuleResult(RuleType.ERROR_MISS, message="Missing Memory request value", matched_rule=self.name)
         return RuleResult(RuleType.NONE)
 
@@ -37,7 +37,7 @@ class MissingCpuLimitRule(Rule):
         return 'CPU_lim' in column_name or ('cpu' in column_name.lower() and 'lim' in column_name.lower())
     def evaluate(self, context: Dict[str, Any]) -> RuleResult:
         cell_value = context.get('cell_value', '')
-        if not cell_value or cell_value in ['-', 'N/A', 'None', '0', '0m']:
+        if not cell_value or str(cell_value).strip() in ['', '-', 'N/A', 'None']:
             return RuleResult(RuleType.WARNING_MISS, message="Missing CPU limit value", matched_rule=self.name)
         return RuleResult(RuleType.NONE)
 
@@ -50,7 +50,7 @@ class MissingMemoryLimitRule(Rule):
         return 'Mem_lim' in column_name or ('mem' in column_name.lower() and 'lim' in column_name.lower())
     def evaluate(self, context: Dict[str, Any]) -> RuleResult:
         cell_value = context.get('cell_value', '')
-        if not cell_value or cell_value in ['-', 'N/A', 'None', '0', '0Mi', '0MiB']:
+        if not cell_value or str(cell_value).strip() in ['', '-', 'N/A', 'None']:
             return RuleResult(RuleType.WARNING_MISS, message="Missing Memory limit value", matched_rule=self.name)
         return RuleResult(RuleType.NONE)
 

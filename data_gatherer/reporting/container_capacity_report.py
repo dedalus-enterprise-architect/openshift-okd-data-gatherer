@@ -112,7 +112,9 @@ class CapacityReport(ReportGenerator):
         if not pod_spec:
             return None
             
-        replicas = get_replicas_for_workload(kind, manifest) or 1
+        replicas = get_replicas_for_workload(kind, manifest)
+        if replicas is None:
+            replicas = 1  # If replica count is missing, default to 1 (but allow 0)
         containers = [(c, 'main') for c in pod_spec.get('containers', [])]
         containers += [(c, 'init') for c in pod_spec.get('initContainers', [])]
         

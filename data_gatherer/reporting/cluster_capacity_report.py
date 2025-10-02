@@ -89,18 +89,26 @@ class ClusterCapacityReport(ReportGenerator):
 		ns_totals: Dict[str, Dict[str, int]] = {}
 		
 		for rec in rows:
-			namespace = rec['namespace'] or '<cluster-scoped>'
-			manifest = rec['manifest']
 			kind = rec['kind']
+			namespace = rec['namespace'] or ''
+			name = rec['name']
+			manifest = rec['manifest']
 			
 			pod_spec = extract_pod_spec(kind, manifest)
 			if not pod_spec:
 				continue
-				
-			replicas = get_replicas_for_workload(kind, manifest) or 1
-			ns_totals.setdefault(namespace, {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0})
 			
-			for cdef in pod_spec.get('containers', []):
+			# Fix: Use actual replica count including zero, don't default to 1
+			replicas = get_replicas_for_workload(kind, manifest)
+			if replicas is None:
+				replicas = 1  # If replica count is missing, default to 1 (but allow 0)
+			
+			# Initialize namespace totals if not exists
+			if namespace not in ns_totals:
+				ns_totals[namespace] = {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0}
+			
+			# Process containers (main + init)
+			for cdef in pod_spec.get('containers', []) + pod_spec.get('initContainers', []):
 				self._process_container_resources(cdef, replicas, ns_totals[namespace])
 		
 		return ns_totals
@@ -111,7 +119,7 @@ class ClusterCapacityReport(ReportGenerator):
 		
 		Args:
 			cdef: Container definition from pod spec
-			replicas: Number of replicas for the workload
+			replicas: Number of replicas for the workload (including zero)
 			ns_total: Namespace totals dictionary to update
 		"""
 		res = cdef.get('resources', {})
@@ -123,6 +131,7 @@ class ClusterCapacityReport(ReportGenerator):
 		cpu_lim = cpu_to_milli(lim.get('cpu')) or 0
 		mem_lim = mem_to_mi(lim.get('memory')) or 0
 		
+		# Multiply by actual replica count (including zero)
 		if cpu_req:
 			ns_total['cpu'] += cpu_req * replicas
 		if mem_req:
