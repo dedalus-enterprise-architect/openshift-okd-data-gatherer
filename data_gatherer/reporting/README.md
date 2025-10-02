@@ -50,6 +50,20 @@ Rules are defined in `rules/official_rules.py` and dispatched through the rules 
 
 Reports are generated via the main CLI `report` subcommand. You can target one or many clusters.
 
+### Getting Help
+
+Use the custom `help` command to list all available commands or get detailed help for a specific command:
+
+```bash
+# List all available commands
+python -m data_gatherer.run help
+
+# Show help for a specific command (e.g., report)
+python -m data_gatherer.run help report
+```
+
+### Report Generation Examples
+
 ```bash
 # List available report types
 python -m data_gatherer.run report --list-types
@@ -67,5 +81,9 @@ python -m data_gatherer.run report --cluster prod --cluster staging --type conta
 python -m data_gatherer.run report --all-clusters --all
 
 # Explicit output path (single cluster only)
+# --out now accepts either a full file path or a directory. If a directory is given, the tool will generate a default filename inside it (using the report's filename_prefix and a timestamp).
 python -m data_gatherer.run report --cluster prod --type summary --out /tmp/prod-summary.html
+
+# Example: pass a directory to --out
+python -m data_gatherer.run report --cluster prod --type summary --out /tmp/reports/
 ```
