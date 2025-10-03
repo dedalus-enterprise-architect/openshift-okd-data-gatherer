@@ -11,6 +11,7 @@ from data_gatherer.export.manifest import ManifestExporter
 from data_gatherer.sync.engine import SyncEngine
 from data_gatherer.kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources
 from data_gatherer.util import logging as log
+from data_gatherer import __version__
 from kubernetes import client as k8s_client
 
 DEFAULT_DATA_DIR = 'clusters'
@@ -26,6 +27,7 @@ def _get_file_extension(format_name: str, generator) -> str:
         # Fallback to generator's default extension
         return getattr(generator, 'file_extension', '.html')
 
+@click.version_option(version=__version__, prog_name='data-gatherer')
 @click.group(add_help_option=False)
 @click.option('--config', default='config/config.yaml', help='Config file path')
 @click.pass_context
