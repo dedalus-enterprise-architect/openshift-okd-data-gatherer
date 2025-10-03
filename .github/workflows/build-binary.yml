@@ -38,7 +38,7 @@ jobs:
           # Add more CLI tests as needed
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: data-gatherer-binary
           path: bin/data-gatherer
