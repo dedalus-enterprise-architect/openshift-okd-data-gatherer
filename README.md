@@ -1,5 +1,5 @@
-# OpenShift Data Gatherer
 
+# OpenShift Data Gatherer
 
 OpenShift Data Gatherer is a snapshot tool for collecting controller manifests and node capacity from OpenShift clusters. It produces concise reports for capacity planning and configuration auditing. The focus is on sizing, configuration consistency, and inventory—not live metrics.
 
@@ -33,23 +33,11 @@ The database always reflects the latest sync; removed objects disappear automati
 7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
 8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
 9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.
-
 10. Open the reports in `clusters/my-cluster/reports/` (HTML) or your chosen output path (Excel).
 
 
+### Usage examples
 
-### Quick Start Example
-```bash
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp config/example-config.yaml config/config.yaml  # edit it now
-python -m data_gatherer.run init --cluster my-cluster
-python -m data_gatherer.run sync --cluster my-cluster
-python -m data_gatherer.run report --cluster my-cluster --all
-# Open clusters/my-cluster/reports/*.html
-```
-
-### Basic Usage
 Initialize storage:
 ```bash
 python -m data_gatherer.run init --cluster my-cluster
@@ -150,6 +138,7 @@ python -m data_gatherer.run kinds
 Use `python -m data_gatherer.run report --list-types` to see all available types.
 For detailed descriptions of each report, output formats, and legend, see `data_gatherer/reporting/README.md`.
 
+> **See also:** [Core logic and rules summary](./core_logic.md) — for detailed tables on extraction, filtering, rules, and math logic used in all reports.
 
 ## 8. Node Sizing Snapshot
 Include `Node` in `include_kinds` to capture per-node capacity and attributes. View with the `nodes` command or nodes report. This is a point-in-time view.
