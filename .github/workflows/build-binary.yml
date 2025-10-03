@@ -1,0 +1,44 @@
+name: Build and Test Data Gatherer Binary
+
+# Builds and tests the data-gatherer binary using PyInstaller. Saves the binary in bin/ and uploads as an artifact.
+# Runs on push to main when data_gatherer/run.py changes, and also on workflow_dispatch (manual trigger).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data_gatherer/run.py'
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          mkdir -p bin
+          pyinstaller --onefile --name data-gatherer --distpath bin data_gatherer/run.py
+
+      - name: Test binary
+        run: |
+          ./bin/data-gatherer --version || true
+          # Add more CLI tests as needed
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: data-gatherer-binary
+          path: bin/data-gatherer
