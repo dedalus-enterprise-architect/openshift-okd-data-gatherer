@@ -1,9 +1,9 @@
 from __future__ import annotations
 import html
 from typing import Dict, List, Tuple, Optional
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from .common import wrap_html_document, format_cell_with_condition, build_legend_html
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.reporting.common import wrap_html_document, format_cell_with_condition, build_legend_html
 
 
 def _parse_resource_value(value: Optional[str]) -> Optional[float]:

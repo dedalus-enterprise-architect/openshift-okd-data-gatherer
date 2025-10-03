@@ -6,7 +6,7 @@ including resource parsing, pod spec extraction, and HTML generation utilities.
 from __future__ import annotations
 import html
 from typing import Optional, Dict, Any, List
-from .rules import RulesEngine, RuleRegistry, register_official_rules
+from data_gatherer.reporting.rules import RulesEngine, RuleRegistry, register_official_rules
 
 
 # Common workload kinds for container-based reports

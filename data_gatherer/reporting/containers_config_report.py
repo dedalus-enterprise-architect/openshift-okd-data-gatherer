@@ -1,8 +1,8 @@
 from __future__ import annotations
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
     extract_pod_spec, get_replicas_for_workload,
     build_legend_html, get_common_legend_sections, wrap_html_document,

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
-from .base import RuleResult, RuleType
-from .registry import RuleRegistry
+from data_gatherer.reporting.rules.base import RuleResult, RuleType
+from data_gatherer.reporting.rules.registry import RuleRegistry
 
 
 class RulesEngine:

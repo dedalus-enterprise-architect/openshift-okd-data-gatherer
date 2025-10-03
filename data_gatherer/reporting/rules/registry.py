@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from .base import Rule
+from data_gatherer.reporting.rules.base import Rule
 
 
 class RuleRegistry:

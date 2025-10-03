@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from .base import Rule, RuleResult, RuleType
+from data_gatherer.reporting.rules.base import Rule, RuleResult, RuleType
 from typing import Optional
 
 

@@ -1,8 +1,8 @@
 """Rules engine package exports."""
-from .engine import RulesEngine
-from .registry import RuleRegistry
-from .base import Rule, RuleType, RuleResult
-from .official_rules import register_official_rules
+from data_gatherer.reporting.rules.engine import RulesEngine
+from data_gatherer.reporting.rules.registry import RuleRegistry
+from data_gatherer.reporting.rules.base import Rule, RuleType, RuleResult
+from data_gatherer.reporting.rules.official_rules import register_official_rules
 
 __all__ = [
     'RulesEngine',

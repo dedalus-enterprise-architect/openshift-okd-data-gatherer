@@ -1,10 +1,10 @@
 from __future__ import annotations
 import html
 import json
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from .common import wrap_html_document, format_cell_with_condition
-from ..persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.reporting.common import wrap_html_document, format_cell_with_condition
+from data_gatherer.persistence.workload_queries import WorkloadQueries
 
 
 @register

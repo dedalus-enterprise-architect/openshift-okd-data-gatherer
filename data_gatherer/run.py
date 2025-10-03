@@ -3,14 +3,14 @@ import click
 import os
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .config import load_config
-from .persistence.db import WorkloadDB
-from .cluster.context import get_cluster_cfg, get_cluster_paths, open_cluster_db
-from .persistence.queries import NodeQueries
-from .export.manifest import ManifestExporter
-from .sync.engine import SyncEngine
-from .kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources
-from .util import logging as log
+from data_gatherer.config import load_config
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.cluster.context import get_cluster_cfg, get_cluster_paths, open_cluster_db
+from data_gatherer.persistence.queries import NodeQueries
+from data_gatherer.export.manifest import ManifestExporter
+from data_gatherer.sync.engine import SyncEngine
+from data_gatherer.kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources
+from data_gatherer.util import logging as log
 from kubernetes import client as k8s_client
 
 DEFAULT_DATA_DIR = 'clusters'
@@ -146,7 +146,7 @@ def sync(ctx, clusters, all_clusters, kind):
         errors = {}
         max_workers = min(target.parallelism, len(kind_map))
         log.info('starting parallel fetch', cluster=cluster, max_workers=max_workers, total_kinds=len(kind_map))
-        from .persistence.db import WorkloadDB as _DBFactory
+        from data_gatherer.persistence.db import WorkloadDB as _DBFactory
         def _fetch_and_sync(single_kind: str):
             api_version, plural, namespaced = kind_map[single_kind]
             _, items, error = _fetch_kind_items(api_client, single_kind, api_version, plural, target, namespaced)
@@ -206,13 +206,13 @@ def sync(ctx, clusters, all_clusters, kind):
 @click.pass_context
 def report(ctx, clusters, all_clusters, report_type, output_format, out, all, list_types):
     from datetime import datetime
-    from .reporting.base import get_report_types, get_generator
-    from .reporting import summary_report  # noqa: F401
-    from .reporting import containers_config_report  # noqa: F401
-    from .reporting import nodes_report  # noqa: F401
+    from data_gatherer.reporting.base import get_report_types, get_generator
+    from data_gatherer.reporting import summary_report  # noqa: F401
+    from data_gatherer.reporting import containers_config_report  # noqa: F401
+    from data_gatherer.reporting import nodes_report  # noqa: F401
     # Import both capacity-related reports so their @register decorators run
-    from .reporting import container_capacity_report  # noqa: F401 registers 'container-capacity'
-    from .reporting import cluster_capacity_report  # noqa: F401 registers 'cluster-capacity'
+    from data_gatherer.reporting import container_capacity_report  # noqa: F401 registers 'container-capacity'
+    from data_gatherer.reporting import cluster_capacity_report  # noqa: F401 registers 'cluster-capacity'
     if list_types:
         click.echo('Available report types:')
         for t in get_report_types():
@@ -344,7 +344,7 @@ def kinds(ctx):
     config = ctx.obj['config']
     cfg = load_config(config)
     log.configure_logging(cfg.logging.level, cfg.logging.format)
-    from .kube.client import STATIC_KIND_MAP
+    from data_gatherer.kube.client import STATIC_KIND_MAP
     click.echo('Available workload kinds:')
     for kind, (api_version, plural, namespaced) in STATIC_KIND_MAP.items():
         scope = 'namespaced' if namespaced else 'cluster-scoped'

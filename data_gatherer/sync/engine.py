@@ -1,9 +1,9 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Dict, Any, Iterable, Tuple, List
-from ..persistence.db import WorkloadDB
-from .normalize import normalize_manifest
-from ..util.hash import sha256_of_manifest
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.sync.normalize import normalize_manifest
+from data_gatherer.util.hash import sha256_of_manifest
 
 
 class SyncStats:

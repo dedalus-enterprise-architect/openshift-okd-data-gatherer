@@ -1,10 +1,10 @@
 from __future__ import annotations
 import html
 from typing import List, Dict, Any, Tuple, Optional
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
 	cpu_to_milli, mem_to_mi,
 	build_legend_html, wrap_html_document,
 	CONTAINER_WORKLOAD_KINDS, extract_pod_spec, get_replicas_for_workload

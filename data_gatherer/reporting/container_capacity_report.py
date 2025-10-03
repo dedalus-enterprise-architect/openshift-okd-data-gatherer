@@ -1,10 +1,10 @@
 from __future__ import annotations
 import html
 from typing import List, Dict, Any, Optional, Tuple
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
     extract_pod_spec, get_replicas_for_workload,
     build_legend_html, wrap_html_document,
@@ -603,7 +603,7 @@ class CapacityReport(ReportGenerator):
             cell.alignment = Alignment(horizontal='center')
         
         # Write data rows with proper conditional formatting using rules engine
-        from .common import get_rules_engine
+        from data_gatherer.reporting.common import get_rules_engine
         rules_engine = get_rules_engine()
         
         for row_num, row_data in enumerate(table_rows, 4):

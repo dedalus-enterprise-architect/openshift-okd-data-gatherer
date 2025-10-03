@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import os
-from ..config import AppConfig, ClusterConfig
-from ..persistence.db import WorkloadDB
+from data_gatherer.config import AppConfig, ClusterConfig
+from data_gatherer.persistence.db import WorkloadDB
 
 @dataclass(frozen=True)
 class ClusterPaths:

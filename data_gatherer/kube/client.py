@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Tuple, Iterable
 from kubernetes import config as k8s_config, client as k8s_client
 from kubernetes.client.exceptions import ApiException
 import urllib3, time, json
-from ..util import logging as log
+from data_gatherer.util import logging as log
 urllib3.disable_warnings()
 
 def load_kubeconfig(kubeconfig: str | None = None):
