@@ -6,7 +6,7 @@ from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.persistence.workload_queries import WorkloadQueries
 from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
-    extract_pod_spec, get_replicas_for_workload,
+    extract_pod_spec, calculate_effective_replicas,
     build_legend_html, wrap_html_document,
     format_cell_with_condition
 )
@@ -117,17 +117,10 @@ class CapacityReport(ReportGenerator):
         if not pod_spec:
             return None
         
-        # Calculate replicas with DaemonSet support
-        if kind == 'DaemonSet':
-            # Check if this DaemonSet will run on worker nodes
-            if not self._will_run_on_worker(pod_spec):
-                replicas = 0
-            else:
-                replicas = worker_node_count
-        else:
-            replicas = get_replicas_for_workload(kind, manifest)
-            if replicas is None:
-                replicas = 1  # If replica count is missing, default to 1 (but allow 0)
+        # Use shared calculation logic for consistency across all reports
+        replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
+        
+        # Process only main containers (init containers shown separately but not counted in totals)
         containers = [(c, 'main') for c in pod_spec.get('containers', [])]
         containers += [(c, 'init') for c in pod_spec.get('initContainers', [])]
         
@@ -241,29 +234,6 @@ class CapacityReport(ReportGenerator):
                 if ctype == 'main':
                     aggregates['main_mem_lim_raw'] += mem_lim
                     aggregates['main_mem_lim_total'] += mem_lim_total
-
-    def _will_run_on_worker(self, pod_spec: Dict[str, Any]) -> bool:
-        """
-        Determine if a pod will run on worker nodes based on node selectors.
-        
-        Args:
-            pod_spec: Pod specification from workload manifest
-            
-        Returns:
-            True if pod can run on worker nodes, False otherwise
-        """
-        node_selector = pod_spec.get('nodeSelector', {})
-        
-        # If specifically targeting master or infra nodes, it won't run on workers
-        if 'node-role.kubernetes.io/master' in node_selector:
-            return False
-        if 'node-role.kubernetes.io/control-plane' in node_selector:
-            return False
-        if 'node-role.kubernetes.io/infra' in node_selector:
-            return False
-        
-        # If no restricting node selector, or if explicitly targeting workers, it will run on workers
-        return True
 
     def _get_node_capacity(self, db: WorkloadDB, cluster: str) -> Dict[str, int]:
         """

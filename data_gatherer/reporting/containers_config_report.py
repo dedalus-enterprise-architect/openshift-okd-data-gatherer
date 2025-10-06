@@ -4,7 +4,7 @@ from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.persistence.workload_queries import WorkloadQueries
 from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
-    extract_pod_spec, get_replicas_for_workload,
+    extract_pod_spec, calculate_effective_replicas,
     build_legend_html, get_common_legend_sections, wrap_html_document,
     format_cell_with_condition
 )
@@ -50,15 +50,8 @@ class ContainerConfigurationReport(ReportGenerator):
             if not pod_spec:
                 continue
             
-            # Calculate replicas with DaemonSet support
-            if kind == 'DaemonSet':
-                # Check if this DaemonSet will run on worker nodes
-                if not self._will_run_on_worker(pod_spec):
-                    replicas = 0
-                else:
-                    replicas = worker_node_count
-            else:
-                replicas = get_replicas_for_workload(kind, manifest)
+            # Use shared calculation logic for consistency across all reports
+            replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
             
             pod_labels = self._format_labels(
                 (manifest.get('spec', {}).get('template', {}).get('metadata', {}).get('labels', {}))
@@ -205,29 +198,6 @@ class ContainerConfigurationReport(ReportGenerator):
         
         # Save the workbook
         wb.save(out_path)
-
-    def _will_run_on_worker(self, pod_spec: Dict[str, Any]) -> bool:
-        """
-        Determine if a pod will run on worker nodes based on node selectors.
-        
-        Args:
-            pod_spec: Pod specification from workload manifest
-            
-        Returns:
-            True if pod can run on worker nodes, False otherwise
-        """
-        node_selector = pod_spec.get('nodeSelector', {})
-        
-        # If specifically targeting master or infra nodes, it won't run on workers
-        if 'node-role.kubernetes.io/master' in node_selector:
-            return False
-        if 'node-role.kubernetes.io/control-plane' in node_selector:
-            return False
-        if 'node-role.kubernetes.io/infra' in node_selector:
-            return False
-        
-        # If no restricting node selector, or if explicitly targeting workers, it will run on workers
-        return True
 
     def _get_worker_node_count(self, db: WorkloadDB, cluster: str) -> int:
         """

@@ -7,7 +7,7 @@ from data_gatherer.persistence.workload_queries import WorkloadQueries
 from data_gatherer.reporting.common import (
 	cpu_to_milli, mem_to_mi,
 	build_legend_html, wrap_html_document,
-	CONTAINER_WORKLOAD_KINDS, extract_pod_spec, get_replicas_for_workload
+	CONTAINER_WORKLOAD_KINDS, extract_pod_spec, calculate_effective_replicas
 )
 
 
@@ -106,25 +106,12 @@ class ClusterCapacityReport(ReportGenerator):
 			if not pod_spec:
 				continue
 			
-			# Check if this workload will run on worker nodes
-			if not self._will_run_on_worker(pod_spec):
-				continue
+			# Use shared calculation logic for consistency across all reports
+			replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
 			
-			# Calculate replicas based on workload type
-			if kind == 'DaemonSet':
-				# DaemonSets run one pod per eligible node
-				node_selector = pod_spec.get('nodeSelector', {})
-				if node_selector:
-					# For now, we can't determine exact eligible nodes without node label data
-					# Conservative approach: assume it runs on all worker nodes
-					replicas = worker_node_count
-				else:
-					replicas = worker_node_count
-			else:
-				# For other workload types, use standard replica calculation
-				replicas = get_replicas_for_workload(kind, manifest)
-				if replicas is None:
-					replicas = 1  # Default to 1 if not specified
+			# Skip workloads that don't run on worker nodes (replicas will be 0)
+			if replicas == 0:
+				continue
 			
 			# Initialize namespace totals if not exists
 			if namespace not in ns_totals:
@@ -136,29 +123,6 @@ class ClusterCapacityReport(ReportGenerator):
 		
 		return ns_totals
 	
-	def _will_run_on_worker(self, pod_spec: Dict[str, Any]) -> bool:
-		"""
-		Determine if a pod will run on worker nodes based on node selectors.
-		
-		Args:
-			pod_spec: Pod specification from workload manifest
-			
-		Returns:
-			True if pod can run on worker nodes, False otherwise
-		"""
-		node_selector = pod_spec.get('nodeSelector', {})
-		
-		# If specifically targeting master or infra nodes, it won't run on workers
-		if 'node-role.kubernetes.io/master' in node_selector:
-			return False
-		if 'node-role.kubernetes.io/control-plane' in node_selector:
-			return False
-		if 'node-role.kubernetes.io/infra' in node_selector:
-			return False
-		
-		# If no restricting node selector, or if explicitly targeting workers, it will run on workers
-		return True
-
 	def _process_container_resources(self, cdef: Dict[str, Any], replicas: int, ns_total: Dict[str, int]) -> None:
 		"""
 		Process individual container resource requirements into namespace totals.
