@@ -6,8 +6,12 @@ name: Build and Test Data Gatherer Binary
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'data_gatherer/run.py'
+      - 'data_gatherer/_version.py'
+      - '.github/workflows/build-binary.yml'
   workflow_dispatch:
 
 jobs:
@@ -27,18 +31,44 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Determine version
+        id: version
+        run: |
+          VERSION=$(python -c "from data_gatherer._version import __version__; print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
       - name: Build binary
         run: |
           mkdir -p bin
           pyinstaller --onefile --name data-gatherer --distpath bin data_gatherer/run.py
+          cp bin/data-gatherer "bin/data-gatherer-${{ steps.version.outputs.version }}"
 
       - name: Test binary
         run: |
-          ./bin/data-gatherer --version || true
-          # Add more CLI tests as needed
+          ./bin/data-gatherer --version
+          ./bin/data-gatherer-${{ steps.version.outputs.version }} --version
+          # Basic smoke command (help)
+          ./bin/data-gatherer help || true
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: data-gatherer-binary
-          path: bin/data-gatherer
+            name: data-gatherer-${{ steps.version.outputs.version }}
+            path: |
+              bin/data-gatherer
+              bin/data-gatherer-${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            bin/data-gatherer
+            bin/data-gatherer-${{ steps.version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

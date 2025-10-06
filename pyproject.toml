@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openshift-okd-data-gatherer"
+dynamic = ["version"]
+description = "OpenShift / OKD data gatherer and reporting tool"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "Dedalus Enterprise Architecture"}
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+dependencies = []  # managed via requirements.txt for now
+
+[project.scripts]
+data-gatherer = "data_gatherer.run:cli"
+
+[tool.hatch.version]
+path = "data_gatherer/_version.py"
+
+[tool.hatch.build]
+include = [
+  "data_gatherer/**",
+  "README.md",
+  "LICENSE"
+]

@@ -1,2 +1,4 @@
-__all__ = ['run']
-__version__ = '0.1.0'
+from ._version import __version__  # single source of truth
+
+__all__ = ["run", "__version__"]
+
