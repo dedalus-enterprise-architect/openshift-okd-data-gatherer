@@ -350,7 +350,7 @@ class CapacityReport(ReportGenerator):
                     'Name: Workload name',
                     'Container: Container name inside pod spec',
                     'Type: Always "main"',
-                    'Replicas: Desired replicas (blank for DaemonSet)',
+                    'Replicas: Replica number set in spec (DaemonSet replicas only on worker nodes)',
                     'CPU_req_m: CPU request (millicores)',
                     'CPU_lim_m: CPU limit (millicores)',
                     'Mem_req_Mi: Memory request (MiB)',
@@ -722,7 +722,7 @@ class CapacityReport(ReportGenerator):
     def _namespace_totals_tooltips(self) -> Dict[str, str]:
         # Deprecated concise tooltips retained for backward compatibility (currently unused)
         return {
-            'label': 'Namespace totals (runtime containers only).',
+            'label': 'Namespace totals.',
             'CPU_req_m': 'Sum of per-container CPU requests (m) for main containers (not multiplied by replicas).',
             'CPU_lim_m': 'Sum of per-container CPU limits (m) for main containers (not multiplied by replicas).',
             'Mem_req_Mi': 'Sum of per-container memory requests (Mi) for main containers (not multiplied by replicas).',
@@ -749,43 +749,35 @@ class CapacityReport(ReportGenerator):
         comments = {
             'label': f"Namespace totals for '{ns}' (runtime steady-state containers only).",
             'CPU_req_m': (
-                "CPU Request (per container)\n\n"
-                f"Sum of CPU requests for all main containers in namespace {ns}.\n\n"
+                f"Sum of CPU requests for all main containers in namespace {ns}.\n"
                 "Formula: Σ(CPU_req_m) for each main container (not multiplied by replicas)."
             ),
             'CPU_lim_m': (
-                "CPU Limit (per container)\n\n"
-                f"Sum of CPU limits for all main containers in namespace {ns}.\n\n"
+                f"Sum of CPU limits for all main containers in namespace {ns}.\n"
                 "Formula: Σ(CPU_lim_m) for each main container (not multiplied by replicas)."
             ),
             'Mem_req_Mi': (
-                "Memory Request (per container)\n\n"
-                f"Sum of memory requests for all main containers in namespace {ns}.\n\n"
+                f"Sum of memory requests for all main containers in namespace {ns}.\n"
                 "Formula: Σ(Mem_req_Mi) for each main container (not multiplied by replicas)."
             ),
             'Mem_lim_Mi': (
-                "Memory Limit (per container)\n\n"
-                f"Sum of memory limits for all main containers in namespace {ns}.\n\n"
+                f"Sum of memory limits for all main containers in namespace {ns}.\n"
                 "Formula: Σ(Mem_lim_Mi) for each main container (not multiplied by replicas)."
             ),
             'CPU_req_m_total': (
-                "CPU Request Total (namespace runtime)\n\n"
-                f"Total CPU requests for all running pods in namespace {ns}.\n\n"
+                f"Total CPU requests for all running pods in namespace {ns}.\n"
                 "Formula: Σ(Replicas × CPU_req_m) for each main container."
             ),
             'CPU_lim_m_total': (
-                "CPU Limit Total (namespace runtime)\n\n"
-                f"Total CPU limits for all running pods in namespace {ns}.\n\n"
+                f"Total CPU limits for all running pods in namespace {ns}.\n"
                 "Formula: Σ(Replicas × CPU_lim_m) for each main container."
             ),
             'Mem_req_Mi_total': (
-                "Memory Request Total (namespace runtime)\n\n"
-                f"Total memory requests for all running pods in namespace {ns}.\n\n"
+                f"Total memory requests for all running pods in namespace {ns}.\n"
                 "Formula: Σ(Replicas × Mem_req_Mi) for each main container."
             ),
             'Mem_lim_Mi_total': (
-                "Memory Limit Total (namespace runtime)\n\n"
-                f"Total memory limits for all running pods in namespace {ns}.\n\n"
+                f"Total memory limits for all running pods in namespace {ns}.\n"
                 "Formula: Σ(Replicas × Mem_lim_Mi) for each main container."
             ),
         }
