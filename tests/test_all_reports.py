@@ -70,15 +70,16 @@ logging:
         assert result.exit_code == 0
         output = result.output
 
-        # Should mention generating each report type
-        assert 'Generating container-capacity report...' in output
-        assert 'Generating nodes report...' in output
-        assert 'Generating summary report...' in output
-        assert 'Generating containers-config report...' in output
-        assert 'Generating cluster-capacity report...' in output
+        # Should mention generating each report type in new format
+        assert '[test-cluster] Generating container-capacity (html)' in output
+        assert '[test-cluster] Generating nodes (html)' in output
+        assert '[test-cluster] Generating summary (html)' in output
+        assert '[test-cluster] Generating containers-config (html)' in output
+        assert '[test-cluster] Generating cluster-capacity (html)' in output
 
-        # Should show successful generation
-        assert 'Generated 5 reports successfully.' in output
+        # New summary section
+        assert 'Summary:' in output
+        assert 'Generated:' in output
 
         # Verify report files were created
         reports_dir = os.path.join(tmp_dir, 'test-cluster', 'reports')
@@ -93,31 +94,33 @@ logging:
             )
 
 
-def test_report_all_flag_validation():
-    """Test validation of --all flag with conflicting options."""
+def test_report_all_flag_out_directory_and_format():
+    """--all with --out directory and --format override should work."""
+    import tempfile
     runner = click.testing.CliRunner()
-    
-    # Test --all with --type should fail
-    result = runner.invoke(cli, [
-        'report', 
-        '--cluster', 'test-cluster', 
-        '--all', 
-        '--type', 'containers'
-    ])
-    
-    assert result.exit_code != 0
-    assert 'Cannot specify --type with --all flag' in result.output
-    
-    # Test --all with --out should fail
-    result = runner.invoke(cli, [
-        'report', 
-        '--cluster', 'test-cluster', 
-        '--all', 
-        '--out', '/tmp/report.html'
-    ])
-    
-    assert result.exit_code != 0
-    assert 'Cannot specify --out with --all flag' in result.output
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cfg_content = f'''storage:\n  base_dir: {tmp_dir}\n  write_manifest_files: false\nclusters:\n  - name: test-cluster\n    credentials:\n      host: https://dummy\n      verify_ssl: false\n    include_kinds: [Deployment]\n    parallelism: 2\nlogging:\n  level: INFO\n  format: text\n'''
+        config_path = os.path.join(tmp_dir, 'config.yaml')
+        with open(config_path, 'w') as f: f.write(cfg_content)
+        db_path = os.path.join(tmp_dir, 'test-cluster', 'data.db')
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        WorkloadDB(db_path)
+        out_dir = os.path.join(tmp_dir, 'custom-out')
+        result = runner.invoke(cli, [
+            '--config', config_path,
+            'report', '--cluster', 'test-cluster', '--all', '--format', 'html', '--out', out_dir
+        ])
+        assert result.exit_code == 0
+        assert os.path.isdir(out_dir)
+        files = os.listdir(out_dir)
+        # Expect 5 reports
+        assert len(files) == 5
+        # Each file should contain cluster name and type in filename
+        assert any('container-capacity' in f for f in files)
+        assert any('containers-config' in f for f in files)
+        assert any('nodes' in f for f in files)
+        assert any('summary' in f for f in files)
+        assert any('cluster-capacity' in f for f in files)
 
 
 def test_list_types_includes_all_reports():

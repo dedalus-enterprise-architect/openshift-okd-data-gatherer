@@ -1,10 +1,11 @@
 
 # OpenShift Data Gatherer
 
-OpenShift Data Gatherer is a snapshot tool for collecting controller manifests and node capacity from OpenShift clusters. It produces concise reports for capacity planning and configuration auditing. The focus is on sizing, configuration consistency, and inventory—not live metrics.
+OpenShift Data Gatherer is a snapshot tool for collecting controller manifests and node capacity from OpenShift clusters. It produces concise reports for capacity planning and configuration auditing. The focus is on sizing, configuration consistency, and inventory — not live metrics.
 
 ---
 ## 1. What You Get
+
 * A repeatable snapshot (current state only) of selected workload kinds and nodes
 * Reports in HTML and Excel formats with hints
 * Only first sync requires a connection to target cluster
@@ -36,7 +37,7 @@ The database always reflects the latest sync; removed objects disappear automati
 10. Open the reports in `clusters/my-cluster/reports/` (HTML) or your chosen output path (Excel).
 
 
-### Usage examples
+### Usage Examples
 
 Initialize storage:
 ```bash
@@ -73,18 +74,17 @@ The following Kubernetes/OpenShift resource kinds are supported for snapshot and
 - Node
 
 ---
-
-## 4. Configuration
+## 5. Configuration
 See `config/README.md` for configuration instructions, authentication methods, and example templates.
 
 ---
-## 5. RBAC (One-Time Cluster Prep)
+## 6. RBAC (One-Time Cluster Prep)
 Use the provided read‑only role for a service account. Run the helper script `rbac/setup-rbac.sh` (see that file for usage) to output a configuration snippet containing token and host; place the snippet inside your `config/config.yaml`.
 
 For manual steps or permission details see `rbac/README.md`.
 
 ---
-## 6. Core Commands & Options
+## 7. Core Commands & Options
 CLI subcommands: init, sync, status, nodes, kinds, report.
 
 ### Global
@@ -132,8 +132,6 @@ List supported kinds & API group.
 python -m data_gatherer.run kinds
 ```
 
-
-
 ### Report Types
 Use `python -m data_gatherer.run report --list-types` to see all available types.
 For detailed descriptions of each report, output formats, and legend, see `data_gatherer/reporting/README.md`.
@@ -142,8 +140,6 @@ For detailed descriptions of each report, output formats, and legend, see `data_
 
 ## 8. Node Sizing Snapshot
 Include `Node` in `include_kinds` to capture per-node capacity and attributes. View with the `nodes` command or nodes report. This is a point-in-time view.
-
----
 
 ## 9. Operational Tips
 * Re-run `sync` any time—it safely replaces previous data.
@@ -157,13 +153,11 @@ Troubleshooting:
 * Missing reports directory → generate at least one report; it will be created automatically.
 
 ---
-
 ## 10. Security & Safety
 * Use a dedicated service account with the provided read-only role.
 * Keep `verify_ssl: true`; only disable temporarily for initial testing.
 
 ---
-
 ## 11. FAQ
 **Does it show real-time usage?** No, only declared requests/limits and node capacity.
 

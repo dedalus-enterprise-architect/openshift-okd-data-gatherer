@@ -95,20 +95,29 @@ class TestOfficialRules:
         rule = MissingCpuRequestRule()
         assert rule.applies_to({'column_name': 'CPU_req_m'}) is True
         assert rule.applies_to({'column_name': 'CPU_lim_m'}) is False
-        for value in ['', '-', 'N/A', 'None', '0', '0m']:
+        # Missing placeholders
+        for value in ['', '-', 'N/A', 'None']:
             result = rule.evaluate({'cell_value': value, 'column_name': 'CPU_req_m'})
             assert result.rule_type == RuleType.ERROR_MISS
             assert 'CPU request' in result.message
+        # Zero values are explicit and not missing
+        for value in ['0', '0m']:
+            result = rule.evaluate({'cell_value': value, 'column_name': 'CPU_req_m'})
+            assert result.rule_type == RuleType.NONE
+        # Normal value
         result = rule.evaluate({'cell_value': '500m', 'column_name': 'CPU_req_m'})
         assert result.rule_type == RuleType.NONE
 
     def test_missing_memory_request_rule(self):
         rule = MissingMemoryRequestRule()
         assert rule.applies_to({'column_name': 'Mem_req_Mi'}) is True
-        for value in ['', '-', 'N/A', 'None', '0', '0Mi', '0MiB']:
+        for value in ['', '-', 'N/A', 'None']:
             result = rule.evaluate({'cell_value': value, 'column_name': 'Mem_req_Mi'})
             assert result.rule_type == RuleType.ERROR_MISS
             assert 'Memory request' in result.message
+        for value in ['0', '0Mi', '0MiB']:
+            result = rule.evaluate({'cell_value': value, 'column_name': 'Mem_req_Mi'})
+            assert result.rule_type == RuleType.NONE
 
     def test_missing_cpu_limit_rule(self):
         rule = MissingCpuLimitRule()
