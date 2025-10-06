@@ -273,7 +273,6 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
 
     def build_output_path(cluster: str, gen, rtype: str, fmt: str) -> str:
         file_ext = _get_file_extension(fmt, gen)
-        prefix = getattr(gen, 'filename_prefix', 'report-')
         cluster_part = sanitize(cluster)
         type_part = sanitize(rtype)
         # Multiple outputs -> always include cluster & type in filename for uniqueness
@@ -284,18 +283,18 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
                 # fall back to per-cluster default dir
                 base_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
             os.makedirs(base_dir, exist_ok=True)
-            return os.path.join(base_dir, f'{prefix}{type_part}-{cluster_part}-{timestamp}{file_ext}')
+            return os.path.join(base_dir, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
         # Single output:
         if out:
             if os.path.isdir(out):
-                return os.path.join(out, f'{prefix}{timestamp}{file_ext}')
+                return os.path.join(out, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
             else:
                 # user provided explicit filename
                 return out
         # default single cluster dir
         base_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
         os.makedirs(base_dir, exist_ok=True)
-        return os.path.join(base_dir, f'{prefix}{timestamp}{file_ext}')
+        return os.path.join(base_dir, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
 
     for cluster in cluster_list:
         try:
@@ -316,6 +315,13 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
                 failures.append((cluster, rtype, str(e)))
                 click.echo(f'[{cluster}] ! Skipping {rtype}: {e}')
                 continue
+            # If user requested excel, skip generators that do not support excel
+            if output_format == 'excel':
+                supported = getattr(gen, 'supported_formats', ['html'])
+                if 'excel' not in supported:
+                    click.echo(f'[{cluster}] ! Skipping {rtype}: does not support excel format')
+                    failures.append((cluster, rtype, 'excel format not supported'))
+                    continue
             fmt = choose_format(gen)
             out_path = build_output_path(cluster, gen, rtype, fmt)
             click.echo(f'[{cluster}] Generating {rtype} ({fmt}) -> {out_path}')

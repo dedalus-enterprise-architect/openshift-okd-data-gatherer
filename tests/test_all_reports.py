@@ -94,7 +94,38 @@ logging:
             )
 
 
-def test_report_all_flag_out_directory_and_format():
+def test_report_all_flag_excel_format_skips_html_only():
+    """--all with --format excel should only generate Excel-compatible reports and skip HTML-only ones."""
+    import tempfile
+    runner = click.testing.CliRunner()
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cfg_content = f'''storage:\n  base_dir: {tmp_dir}\n  write_manifest_files: false\nclusters:\n  - name: test-cluster\n    credentials:\n      host: https://dummy\n      verify_ssl: false\n    include_kinds: [Deployment]\n    parallelism: 2\nlogging:\n  level: INFO\n  format: text\n'''
+        config_path = os.path.join(tmp_dir, 'config.yaml')
+        with open(config_path, 'w') as f:
+            f.write(cfg_content)
+        db_path = os.path.join(tmp_dir, 'test-cluster', 'data.db')
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        WorkloadDB(db_path)
+        out_dir = os.path.join(tmp_dir, 'custom-out')
+        result = runner.invoke(cli, [
+            '--config', config_path,
+            'report', '--cluster', 'test-cluster', '--all', '--format', 'excel', '--out', out_dir
+        ])
+        assert result.exit_code == 0
+        assert os.path.isdir(out_dir)
+        files = os.listdir(out_dir)
+        # Only Excel-compatible reports should be generated
+        # The exact types may vary, but nodes and summary are HTML-only in current implementation
+        assert any('container-capacity' in f and f.endswith('.xlsx') for f in files)
+        assert any('containers-config' in f and f.endswith('.xlsx') for f in files)
+        assert any('cluster-capacity' in f and f.endswith('.xlsx') for f in files)
+        # HTML-only reports should not be present
+        assert not any('nodes' in f for f in files)
+        assert not any('summary' in f for f in files)
+        # Output should mention skipping HTML-only reports
+        output = result.output
+        assert 'Skipping nodes: does not support excel format' in output
+        assert 'Skipping summary: does not support excel format' in output
     """--all with --out directory and --format override should work."""
     import tempfile
     runner = click.testing.CliRunner()
@@ -122,6 +153,39 @@ def test_report_all_flag_out_directory_and_format():
         assert any('summary' in f for f in files)
         assert any('cluster-capacity' in f for f in files)
 
+ 
+def test_report_all_flag_excel_format_skips_html_only():
+    """--all with --format excel should only generate Excel-compatible reports and skip HTML-only ones."""
+    import tempfile
+    runner = click.testing.CliRunner()
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cfg_content = f'''storage:\n  base_dir: {tmp_dir}\n  write_manifest_files: false\nclusters:\n  - name: test-cluster\n    credentials:\n      host: https://dummy\n      verify_ssl: false\n    include_kinds: [Deployment]\n    parallelism: 2\nlogging:\n  level: INFO\n  format: text\n'''
+        config_path = os.path.join(tmp_dir, 'config.yaml')
+        with open(config_path, 'w') as f:
+            f.write(cfg_content)
+        db_path = os.path.join(tmp_dir, 'test-cluster', 'data.db')
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        WorkloadDB(db_path)
+        out_dir = os.path.join(tmp_dir, 'custom-out')
+        result = runner.invoke(cli, [
+            '--config', config_path,
+            'report', '--cluster', 'test-cluster', '--all', '--format', 'excel', '--out', out_dir
+        ])
+        assert result.exit_code == 0
+        assert os.path.isdir(out_dir)
+        files = os.listdir(out_dir)
+        # Only Excel-compatible reports should be generated
+        # The exact types may vary, but nodes and summary are HTML-only in current implementation
+        assert any('container-capacity' in f and f.endswith('.xlsx') for f in files)
+        assert any('containers-config' in f and f.endswith('.xlsx') for f in files)
+        assert any('cluster-capacity' in f and f.endswith('.xlsx') for f in files)
+        # HTML-only reports should not be present
+        assert not any('nodes' in f for f in files)
+        assert not any('summary' in f for f in files)
+        # Output should mention skipping HTML-only reports
+        output = result.output
+        assert 'Skipping nodes: does not support excel format' in output
+        assert 'Skipping summary: does not support excel format' in output
 
 def test_list_types_includes_all_reports():
     """Test that --list-types includes all available report types."""
