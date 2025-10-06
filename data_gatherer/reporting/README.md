@@ -9,6 +9,16 @@ This directory contains report generators for analyzing OpenShift cluster data s
 |------------------------|-------------------------------|--------------|------------------------------------------------------------------------------|
 | summary                | summary_report.py             | HTML         | High-level cluster overview, workload counts, node info                       |
 | container-capacity     | container_capacity_report.py  | HTML, Excel  | Per-container resource requests/limits, allocation patterns, risk indicators   |
+### Init Containers Exclusion (Change Note)
+
+As of the init-container exclusion refactor (January 2025), the `container-capacity` report intentionally ignores init containers for all sizing and aggregation metrics. Earlier versions exposed dual aggregates (`main_*` vs `all_*`) plus an implicit init overhead. This proved confusing for runtime capacity planning because init containers do not consume resources after pod start completion. The report now surfaces only runtime (steady‑state) container resources:
+
+* Removed aggregate keys: `all_cpu_raw`, `all_cpu_total`, `all_mem_raw`, `all_mem_total`, `all_cpu_lim_raw`, `all_cpu_lim_total`, `all_mem_lim_raw`, `all_mem_lim_total`.
+* Removed HTML / Excel rows: "Totals (all containers incl. init)" and "Overhead (init containers)".
+* Namespace totals tooltips and Excel comments explicitly state that init containers are discarded.
+
+If you previously parsed these `all_*` fields, update your automation to rely on the `main_*` counterparts which now represent the sole authoritative values. This change is non‑configurable and uniformly applied to keep the model simple and aligned with real, sustained cluster pressure.
+
 | cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Namespace/cluster-level resource demand, allocatable vs requested, hotspots    |
 | containers-config      | containers_config_report.py   | HTML         | Detailed container configuration, compliance, optimization recommendations    |
 | nodes                  | nodes_report.py               | HTML         | Node details, infrastructure capacity overview                                |

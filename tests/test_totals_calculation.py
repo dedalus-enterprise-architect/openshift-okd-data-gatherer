@@ -296,43 +296,7 @@ class TestClusterWideTotals:
         assert aggregates['main_mem_total'] == 6208, \
             f"Expected main_mem_total=6208, got {aggregates['main_mem_total']}"
     
-    def test_all_containers_aggregation(self, comprehensive_test_db):
-        """Verify that all container totals include init containers."""
-        db, _ = comprehensive_test_db
-        report = ContainerCapacityReport()
-        
-        table_data = report._generate_capacity_data(db, 'test-cluster')
-        aggregates = table_data['aggregates']
-        
-        # Expected all container totals (main + init):
-        # - web-app main: 1800m CPU, 1920Mi Memory
-        # - web-app init: 100m × 3 = 300m CPU, 128 × 3 = 384Mi Memory
-        # - postgres: 2000m CPU, 4096Mi Memory
-        # - node-exporter: 150m CPU, 192Mi Memory
-        # Total: 1800 + 300 + 2000 + 150 = 4250m CPU, 1920 + 384 + 4096 + 192 = 6592Mi Memory
-        
-        assert aggregates['all_cpu_total'] == 4250, \
-            f"Expected all_cpu_total=4250, got {aggregates['all_cpu_total']}"
-        assert aggregates['all_mem_total'] == 6592, \
-            f"Expected all_mem_total=6592, got {aggregates['all_mem_total']}"
-    
-    def test_init_container_overhead_calculation(self, comprehensive_test_db):
-        """Verify init container overhead = all - main."""
-        db, _ = comprehensive_test_db
-        report = ContainerCapacityReport()
-        
-        table_data = report._generate_capacity_data(db, 'test-cluster')
-        aggregates = table_data['aggregates']
-        
-        # Init container overhead:
-        # - CPU: 4250 - 3950 = 300m
-        # - Memory: 6592 - 6208 = 384Mi
-        
-        overhead_cpu = aggregates['all_cpu_total'] - aggregates['main_cpu_total']
-        overhead_mem = aggregates['all_mem_total'] - aggregates['main_mem_total']
-        
-        assert overhead_cpu == 300, f"Expected CPU overhead=300m, got {overhead_cpu}"
-        assert overhead_mem == 384, f"Expected Memory overhead=384Mi, got {overhead_mem}"
+    # Removed tests for all_* and overhead calculations (init containers discarded globally)
     
     def test_limits_totals(self, comprehensive_test_db):
         """Verify that limits are aggregated correctly."""

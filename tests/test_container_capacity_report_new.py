@@ -173,16 +173,16 @@ class TestContainerCapacityReportDataGeneration:
         for row in table_rows:
             assert len(row) == 14
         
-        # Verify aggregates structure
+        # Verify aggregates structure (init containers discarded: only main_* keys remain)
         aggregates = table_data['aggregates']
         expected_agg_keys = [
-            'main_cpu_raw', 'main_mem_raw', 'all_cpu_raw', 'all_mem_raw',
-            'main_cpu_total', 'main_mem_total', 'all_cpu_total', 'all_mem_total',
-            'main_cpu_lim_raw', 'main_mem_lim_raw', 'all_cpu_lim_raw', 'all_mem_lim_raw',
-            'main_cpu_lim_total', 'main_mem_lim_total', 'all_cpu_lim_total', 'all_mem_lim_total'
+            'main_cpu_raw', 'main_mem_raw',
+            'main_cpu_total', 'main_mem_total',
+            'main_cpu_lim_raw', 'main_mem_lim_raw',
+            'main_cpu_lim_total', 'main_mem_lim_total'
         ]
+        assert set(aggregates.keys()) == set(expected_agg_keys)
         for key in expected_agg_keys:
-            assert key in aggregates
             assert isinstance(aggregates[key], int)
         
         # Verify node capacity structure
@@ -259,15 +259,14 @@ class TestContainerCapacityReportHTMLGeneration:
         expected_headers = ["Kind", "Namespace", "Name", "Container", "Type", "Replicas"]
         for header in expected_headers:
             assert f'<th>{header}</th>' in html_content
-        
+
         # Check for namespace grouping
         assert 'production' in html_content
         assert 'storage' in html_content
-        
         # Check for totals sections
         assert 'Totals (main containers)' in html_content
-        assert 'Totals (all containers incl. init)' in html_content
-        assert 'Overhead (init containers)' in html_content
+        assert 'All containers incl. init' not in html_content
+        assert 'Overhead (init containers)' not in html_content
     
     def test_generate_html_report_empty(self, empty_db, tmp_path):
         """Test HTML generation with empty data."""
@@ -423,15 +422,13 @@ class TestContainerCapacityReportExcelGeneration:
 
 
 class TestContainerCapacityReportResourceCalculations:
-    """Test resource calculation accuracy."""
-    
+    """Test resource calculation accuracy (runtime only, init discarded)."""
+
     def test_resource_aggregation_accuracy(self, tmp_path):
-        """Test that resource calculations are accurate."""
         db_path = tmp_path / 'calc-test.db'
         db = WorkloadDB(str(db_path))
         now = datetime.now(timezone.utc)
-        
-        # Create a deployment with known resource values for testing
+
         test_manifest = {
             'apiVersion': 'apps/v1',
             'kind': 'Deployment',
@@ -440,7 +437,7 @@ class TestContainerCapacityReportResourceCalculations:
                 'replicas': 3,
                 'template': {
                     'spec': {
-                        'initContainers': [
+                        'initContainers': [  # Ignored
                             {
                                 'name': 'init',
                                 'resources': {
@@ -462,40 +459,30 @@ class TestContainerCapacityReportResourceCalculations:
                 }
             }
         }
-        
+
         db.upsert_workload(
             cluster='calc-test', api_version='apps/v1', kind='Deployment',
             namespace='test', name='calc-test', resource_version='1', uid='u1',
             manifest=test_manifest, manifest_hash=sha256_of_manifest(test_manifest), now=now
         )
-        
+
         report = CapacityReport()
         table_data = report._generate_capacity_data(db, 'calc-test')
         aggregates = table_data['aggregates']
-        
-        # Verify main container calculations (200m CPU * 3 replicas = 600m)
-        assert aggregates['main_cpu_raw'] == 200
-        assert aggregates['main_cpu_total'] == 600
-        assert aggregates['main_mem_raw'] == 256
-        assert aggregates['main_mem_total'] == 768  # 256 * 3
-        
-        # Verify main container limits
-        assert aggregates['main_cpu_lim_raw'] == 400
-        assert aggregates['main_cpu_lim_total'] == 1200  # 400 * 3
-        assert aggregates['main_mem_lim_raw'] == 512
-        assert aggregates['main_mem_lim_total'] == 1536  # 512 * 3
-        
-        # Verify all containers include init containers
-        assert aggregates['all_cpu_raw'] == 300  # 200 + 100
-        assert aggregates['all_cpu_total'] == 900  # 600 + 300
-        assert aggregates['all_mem_raw'] == 356   # 256 + 100
-        assert aggregates['all_mem_total'] == 1068  # 768 + 300
-        
-        # Verify all container limits
-        assert aggregates['all_cpu_lim_raw'] == 600  # 400 + 200
-        assert aggregates['all_cpu_lim_total'] == 1800  # 1200 + 600
-        assert aggregates['all_mem_lim_raw'] == 712   # 512 + 200
-        assert aggregates['all_mem_lim_total'] == 2136  # 1536 + 600
+
+        assert aggregates == {
+            'main_cpu_raw': 200,
+            'main_mem_raw': 256,
+            'main_cpu_total': 600,
+            'main_mem_total': 768,
+            'main_cpu_lim_raw': 400,
+            'main_mem_lim_raw': 512,
+            'main_cpu_lim_total': 1200,
+            'main_mem_lim_total': 1536,
+        }
+
+        for k in aggregates.keys():
+            assert not k.startswith('all_')
     
     def test_cpu_parsing_edge_cases(self):
         """Test CPU capacity parsing with various formats."""

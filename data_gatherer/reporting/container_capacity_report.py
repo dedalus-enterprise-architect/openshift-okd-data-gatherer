@@ -22,7 +22,6 @@ class CapacityReport(ReportGenerator):
     """
     # Renamed from 'capacity' to 'container-capacity' (no backward alias requested)
     type_name = 'container-capacity'
-    file_extension = '.html'
     filename_prefix = 'container-capacity-'
     supported_formats = ['html', 'excel']
 
@@ -88,12 +87,18 @@ class CapacityReport(ReportGenerator):
         }
 
     def _initialize_aggregates(self) -> Dict[str, int]:
-        """Initialize aggregate counters for resource tracking."""
+        """Initialize aggregate counters for resource tracking.
+        Init containers are discarded so we only keep 'main' aggregates.
+        """
         return {
-            'main_cpu_raw': 0, 'main_mem_raw': 0, 'all_cpu_raw': 0, 'all_mem_raw': 0,
-            'main_cpu_total': 0, 'main_mem_total': 0, 'all_cpu_total': 0, 'all_mem_total': 0,
-            'main_cpu_lim_raw': 0, 'main_mem_lim_raw': 0, 'all_cpu_lim_raw': 0, 'all_mem_lim_raw': 0,
-            'main_cpu_lim_total': 0, 'main_mem_lim_total': 0, 'all_cpu_lim_total': 0, 'all_mem_lim_total': 0
+            'main_cpu_raw': 0,
+            'main_mem_raw': 0,
+            'main_cpu_total': 0,
+            'main_mem_total': 0,
+            'main_cpu_lim_raw': 0,
+            'main_mem_lim_raw': 0,
+            'main_cpu_lim_total': 0,
+            'main_mem_lim_total': 0,
         }
 
     def _process_workload_record(self, rec: Dict[str, Any], aggregates: Dict[str, int], worker_node_count: int) -> Optional[List[List]]:
@@ -116,19 +121,18 @@ class CapacityReport(ReportGenerator):
         pod_spec = extract_pod_spec(kind, manifest)
         if not pod_spec:
             return None
-        
+
         # Use shared calculation logic for consistency across all reports
         replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
-        
-        # Process only main containers (init containers shown separately but not counted in totals)
+
+        # Discard init containers entirely (business decision: runtime sizing focuses only on main containers)
         containers = [(c, 'main') for c in pod_spec.get('containers', [])]
-        containers += [(c, 'init') for c in pod_spec.get('initContainers', [])]
-        
+
         rows = []
         for cdef, ctype in containers:
             row = self._process_container(cdef, ctype, kind, namespace, name, replicas, aggregates)
             rows.append(row)
-            
+
         return rows
 
     def _process_container(
@@ -203,37 +207,28 @@ class CapacityReport(ReportGenerator):
         mem_lim_total: Any
     ) -> None:
         """Update resource aggregates with container values."""
+        if ctype != 'main':
+            return  # Should not happen because we don't process init containers
+
         if cpu_req is not None:
-            aggregates['all_cpu_raw'] += cpu_req
+            aggregates['main_cpu_raw'] += cpu_req
             if isinstance(cpu_req_total, int):
-                aggregates['all_cpu_total'] += cpu_req_total
-                if ctype == 'main':
-                    aggregates['main_cpu_raw'] += cpu_req
-                    aggregates['main_cpu_total'] += cpu_req_total
-                    
+                aggregates['main_cpu_total'] += cpu_req_total
+
         if cpu_lim is not None:
-            aggregates['all_cpu_lim_raw'] += cpu_lim
+            aggregates['main_cpu_lim_raw'] += cpu_lim
             if isinstance(cpu_lim_total, int):
-                aggregates['all_cpu_lim_total'] += cpu_lim_total
-                if ctype == 'main':
-                    aggregates['main_cpu_lim_raw'] += cpu_lim
-                    aggregates['main_cpu_lim_total'] += cpu_lim_total
-                    
+                aggregates['main_cpu_lim_total'] += cpu_lim_total
+
         if mem_req is not None:
-            aggregates['all_mem_raw'] += mem_req
+            aggregates['main_mem_raw'] += mem_req
             if isinstance(mem_req_total, int):
-                aggregates['all_mem_total'] += mem_req_total
-                if ctype == 'main':
-                    aggregates['main_mem_raw'] += mem_req
-                    aggregates['main_mem_total'] += mem_req_total
-                    
+                aggregates['main_mem_total'] += mem_req_total
+
         if mem_lim is not None:
-            aggregates['all_mem_lim_raw'] += mem_lim
+            aggregates['main_mem_lim_raw'] += mem_lim
             if isinstance(mem_lim_total, int):
-                aggregates['all_mem_lim_total'] += mem_lim_total
-                if ctype == 'main':
-                    aggregates['main_mem_lim_raw'] += mem_lim
-                    aggregates['main_mem_lim_total'] += mem_lim_total
+                aggregates['main_mem_lim_total'] += mem_lim_total
 
     def _get_node_capacity(self, db: WorkloadDB, cluster: str) -> Dict[str, int]:
         """
@@ -329,46 +324,23 @@ class CapacityReport(ReportGenerator):
             return 0
 
     def _generate_html_report(self, title: str, table_data: Dict[str, Any], cluster: str, db: WorkloadDB) -> str:
-        """
-        Generate HTML report from processed data.
-        
-        Args:
-            title: Report title
-            table_data: Processed table data
-            cluster: Cluster name 
-            db: Database connection
-            
-        Returns:
-            Complete HTML document as string
-        """
+        """Generate HTML report."""
         table_rows = table_data['table_rows']
         headers = table_data['headers']
         aggregates = table_data['aggregates']
         node_capacity = table_data['node_capacity']
-        
+
         parts = [f"<h1>{html.escape(title)}</h1>"]
-        
-        # Extract aggregated values for use throughout the method
+
         main_cpu_raw = aggregates['main_cpu_raw']
         main_mem_raw = aggregates['main_mem_raw']
-        all_cpu_raw = aggregates['all_cpu_raw']
-        all_mem_raw = aggregates['all_mem_raw']
         main_cpu_total = aggregates['main_cpu_total']
         main_mem_total = aggregates['main_mem_total']
-        all_cpu_total = aggregates['all_cpu_total']
-        all_mem_total = aggregates['all_mem_total']
         main_cpu_lim_raw = aggregates['main_cpu_lim_raw']
         main_mem_lim_raw = aggregates['main_mem_lim_raw']
-        all_cpu_lim_raw = aggregates['all_cpu_lim_raw']
-        all_mem_lim_raw = aggregates['all_mem_lim_raw']
         main_cpu_lim_total = aggregates['main_cpu_lim_total']
         main_mem_lim_total = aggregates['main_mem_lim_total']
-        all_cpu_lim_total = aggregates['all_cpu_lim_total']
-        all_mem_lim_total = aggregates['all_mem_lim_total']
-        
-        # Legend now aligned with unified rules engine severities instead of legacy missing-req/missing-lim classes.
-        # We still show structural row styles (totals) in a separate section for orientation.
-        # Column legend (must cover every table header)
+
         capacity_legend_sections = [
             {
                 'title': 'Columns',
@@ -377,16 +349,16 @@ class CapacityReport(ReportGenerator):
                     'Namespace: Kubernetes namespace (blank for cluster‑scoped)',
                     'Name: Workload name',
                     'Container: Container name inside pod spec',
-                    'Type: Container type (main or init)',
+                    'Type: Always "main"',
                     'Replicas: Desired replicas (blank for DaemonSet)',
                     'CPU_req_m: CPU request (millicores)',
                     'CPU_lim_m: CPU limit (millicores)',
                     'Mem_req_Mi: Memory request (MiB)',
                     'Mem_lim_Mi: Memory limit (MiB)',
-                    'CPU_req_m_total: CPU request * replicas (aggregated)',
-                    'CPU_lim_m_total: CPU limit * replicas (aggregated)',
-                    'Mem_req_Mi_total: Memory request * replicas (aggregated)',
-                    'Mem_lim_Mi_total: Memory limit * replicas (aggregated)'
+                    'CPU_req_m_total: CPU request * replicas',
+                    'CPU_lim_m_total: CPU limit * replicas',
+                    'Mem_req_Mi_total: Memory request * replicas',
+                    'Mem_lim_Mi_total: Memory limit * replicas'
                 ]
             },
             {
@@ -401,62 +373,66 @@ class CapacityReport(ReportGenerator):
             {
                 'title': 'Structural Rows',
                 'items': [
-                    {'class': 'totals-row-main', 'description': 'Totals (main containers)'},
-                    {'class': 'totals-row-all', 'description': 'Totals (all containers incl. init)'},
-                    {'class': 'totals-row-overhead', 'description': 'Init container overhead'},
+                    {'class': 'totals-row-main', 'description': 'Cluster totals (main containers)'},
                     {'class': 'ns-totals', 'description': 'Per-namespace aggregated totals'}
                 ]
             }
         ]
         parts.append(build_legend_html(capacity_legend_sections))
-        parts.append("<h2>Resource Summary by Namespace</h2>")
-        parts.append("<table border=1 cellpadding=4 cellspacing=0>")
+        parts.append('<h2>Resource Summary by Namespace</h2>')
+        parts.append('<table border=1 cellpadding=4 cellspacing=0>')
         parts.append('<tr>' + ''.join(f'<th>{h}</th>' for h in headers) + '</tr>')
-        
+
         from itertools import groupby
         table_rows_sorted = sorted(table_rows, key=lambda r: (r[1], r[0], r[2], r[3]))
         for ns, rows_group in groupby(table_rows_sorted, key=lambda r: r[1]):
             rows_list = list(rows_group)
-            parts.append(f'<tr><td><strong>{html.escape(ns or "")}</strong></td>' + '<td colspan="13"></td></tr>')
+            parts.append(f'<tr><td><strong>{html.escape(ns or "")}</strong></td><td colspan="13"></td></tr>')
             for row in rows_list:
                 values = row[:-1] if len(row) > len(headers) else row
-                cells = []
+                row_cells = []
                 for i, col in enumerate(values):
                     if i < len(headers):
                         row_data = {headers[j]: values[j] for j in range(min(len(headers), len(values)))}
-                        cells.append(format_cell_with_condition(str(col), headers[i], row_data, 'container-capacity'))
+                        row_cells.append(format_cell_with_condition(str(col), headers[i], row_data, 'container-capacity'))
                     else:
-                        cells.append(f'<td>{html.escape(str(col))}</td>')
-                parts.append('<tr>' + ''.join(cells) + '</tr>')
+                        row_cells.append(f'<td>{html.escape(str(col))}</td>')
+                parts.append('<tr>' + ''.join(row_cells) + '</tr>')
             if rows_list:
-                ns_main_cpu_raw = sum((int(r[6]) for r in rows_list if r[4] == 'main' and r[6] != ''), 0)
-                ns_main_cpu_lim_raw = sum((int(r[7]) for r in rows_list if r[4] == 'main' and r[7] != ''), 0)
-                ns_main_mem_raw = sum((int(r[8]) for r in rows_list if r[4] == 'main' and r[8] != ''), 0)
-                ns_main_mem_lim_raw = sum((int(r[9]) for r in rows_list if r[4] == 'main' and r[9] != ''), 0)
-                ns_main_cpu_total = sum((int(r[10]) for r in rows_list if r[4] == 'main' and r[10] != ''), 0)
-                ns_main_cpu_lim_total = sum((int(r[11]) for r in rows_list if r[4] == 'main' and r[11] != ''), 0)
-                ns_main_mem_total = sum((int(r[12]) for r in rows_list if r[4] == 'main' and r[12] != ''), 0)
-                ns_main_mem_lim_total = sum((int(r[13]) for r in rows_list if r[4] == 'main' and r[13] != ''), 0)
-                ns_totals_cells = [
-                    '<th colspan="6">Namespace totals</th>',
-                    format_cell_with_condition(str(ns_main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                    format_cell_with_condition(str(ns_main_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
+                ns_main_cpu_raw = sum(int(r[6]) for r in rows_list if r[4] == 'main' and r[6] != '')
+                ns_main_cpu_lim_raw = sum(int(r[7]) for r in rows_list if r[4] == 'main' and r[7] != '')
+                ns_main_mem_raw = sum(int(r[8]) for r in rows_list if r[4] == 'main' and r[8] != '')
+                ns_main_mem_lim_raw = sum(int(r[9]) for r in rows_list if r[4] == 'main' and r[9] != '')
+                ns_main_cpu_total = sum(int(r[10]) for r in rows_list if r[4] == 'main' and r[10] != '')
+                ns_main_cpu_lim_total = sum(int(r[11]) for r in rows_list if r[4] == 'main' and r[11] != '')
+                ns_main_mem_total = sum(int(r[12]) for r in rows_list if r[4] == 'main' and r[12] != '')
+                ns_main_mem_lim_total = sum(int(r[13]) for r in rows_list if r[4] == 'main' and r[13] != '')
+                comments = self._namespace_totals_comments(ns or '', {
+                    'CPU_req_m': ns_main_cpu_raw,
+                    'CPU_lim_m': ns_main_cpu_lim_raw,
+                    'Mem_req_Mi': ns_main_mem_raw,
+                    'Mem_lim_Mi': ns_main_mem_lim_raw,
+                    'CPU_req_m_total': ns_main_cpu_total,
+                    'CPU_lim_m_total': ns_main_cpu_lim_total,
+                    'Mem_req_Mi_total': ns_main_mem_total,
+                    'Mem_lim_Mi_total': ns_main_mem_lim_total,
+                })
+                ns_cells = [
+                    f'<th colspan="6" title="{html.escape(comments["label"]) }">Namespace totals</th>',
+                    f'<th title="{html.escape(comments["CPU_req_m"]) }">{ns_main_cpu_raw}</th>',
+                    f'<th title="{html.escape(comments["CPU_lim_m"]) }">{ns_main_cpu_lim_raw}</th>',
+                    f'<th title="{html.escape(comments["Mem_req_Mi"]) }">{ns_main_mem_raw}</th>',
+                    f'<th title="{html.escape(comments["Mem_lim_Mi"]) }">{ns_main_mem_lim_raw}</th>',
+                    f'<th title="{html.escape(comments["CPU_req_m_total"]) }">{ns_main_cpu_total}</th>',
+                    f'<th title="{html.escape(comments["CPU_lim_m_total"]) }">{ns_main_cpu_lim_total}</th>',
+                    f'<th title="{html.escape(comments["Mem_req_Mi_total"]) }">{ns_main_mem_total}</th>',
+                    f'<th title="{html.escape(comments["Mem_lim_Mi_total"]) }">{ns_main_mem_lim_total}</th>'
                 ]
-                parts.append('<tr>' + ''.join(ns_totals_cells) + '</tr>')
-        # Visual spacing between per-namespace section and global totals
+                parts.append('<tr>' + ''.join(ns_cells) + '</tr>')
+
         if table_rows:
             parts.append('<tr class="section-separator"><td colspan="14"></td></tr>')
-        if table_rows:
-            overhead_cpu_total = all_cpu_total - main_cpu_total
-            overhead_mem_total = all_mem_total - main_mem_total
-            
-            main_totals_cells = [
+            totals_cells = [
                 '<th colspan="6">Totals (main containers)</th>',
                 format_cell_with_condition(str(main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
                 format_cell_with_condition(str(main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
@@ -467,76 +443,32 @@ class CapacityReport(ReportGenerator):
                 format_cell_with_condition(str(main_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
                 format_cell_with_condition(f'{main_mem_lim_total} ({main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
-            parts.append('<tr>' + ''.join(main_totals_cells) + '</tr>')
-            all_totals_cells = [
-                '<th colspan="6">Totals (all containers incl. init)</th>',
-                format_cell_with_condition(str(all_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
-            ]
-            parts.append('<tr>' + ''.join(all_totals_cells) + '</tr>')
-            overhead_totals_cells = [
-                '<th colspan="6">Overhead (init containers)</th>',
-                format_cell_with_condition(str(all_cpu_raw - main_cpu_raw), 'CPU_req_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_raw - main_cpu_lim_raw), 'CPU_lim_m', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_raw - main_mem_raw), 'Mem_req_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_raw - main_mem_lim_raw), 'Mem_lim_Mi', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(overhead_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_cpu_lim_total - main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(overhead_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(str(all_mem_lim_total - main_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
-            ]
-            parts.append('<tr>' + ''.join(overhead_totals_cells) + '</tr>')
+            parts.append('<tr>' + ''.join(totals_cells) + '</tr>')
         parts.append('</table>')
         if not table_rows:
             parts.append('<p>No container workloads found for this cluster.</p>')
-        
-        # Cluster-wide resource summary (containers vs worker node capacity/allocatable)
+
         worker_cpu_cap = node_capacity['worker_cpu_cap']
         worker_cpu_alloc = node_capacity['worker_cpu_alloc']
         worker_mem_cap = node_capacity['worker_mem_cap']
         worker_mem_alloc = node_capacity['worker_mem_alloc']
 
         parts.append('<h2>Resource Summary (Cluster-wide)</h2>')
-        # Table 1: Container aggregates (requests / limits)
         parts.append('<h3>Containers</h3>')
         parts.append('<table border=1 cellpadding=4 cellspacing=0>')
+        parts.append('<tr><th>Scope</th><th>CPU Requests (m)</th><th>CPU Limits (m)</th><th>Memory Requests (Mi)</th><th>Memory Limits (Mi)</th></tr>')
         parts.append('<tr>'
-                     '<th>Scope</th>'
-                     '<th>CPU Requests (m)</th>'
-                     '<th>CPU Limits (m)</th>'
-                     '<th>Memory Requests (Mi)</th>'
-                     '<th>Memory Limits (Mi)</th>'
-                     '</tr>')
-        parts.append('<tr>'
-                     f'<td>Main containers</td>'
+                     f'<td>Containers</td>'
                      f'<td>{main_cpu_total}</td>'
                      f'<td>{main_cpu_lim_total}</td>'
                      f'<td>{main_mem_total}</td>'
                      f'<td>{main_mem_lim_total}</td>'
                      '</tr>')
-        parts.append('<tr>'
-                     f'<td>All containers (incl. init)</td>'
-                     f'<td>{all_cpu_total}</td>'
-                     f'<td>{all_cpu_lim_total}</td>'
-                     f'<td>{all_mem_total}</td>'
-                     f'<td>{all_mem_lim_total}</td>'
-                     '</tr>')
         parts.append('</table>')
-        # Table 2: Worker node capacity / allocatable
+
         parts.append('<h3>Worker Nodes</h3>')
         parts.append('<table border=1 cellpadding=4 cellspacing=0>')
-        parts.append('<tr>'
-                     '<th>CPU Capacity (m)</th>'
-                     '<th>CPU Allocatable (m)</th>'
-                     '<th>Memory Capacity (Mi)</th>'
-                     '<th>Memory Allocatable (Mi)</th>'
-                     '</tr>')
+        parts.append('<tr><th>CPU Capacity (m)</th><th>CPU Allocatable (m)</th><th>Memory Capacity (Mi)</th><th>Memory Allocatable (Mi)</th></tr>')
         parts.append('<tr>'
                      f'<td>{worker_cpu_cap}</td>'
                      f'<td>{worker_cpu_alloc}</td>'
@@ -544,18 +476,14 @@ class CapacityReport(ReportGenerator):
                      f'<td>{worker_mem_alloc}</td>'
                      '</tr>')
         parts.append('</table>')
+
         additional_css = (
             " .totals-row-main th { background:#dfe; }"
-            " .totals-row-all th { background:#def; }"
-            " .totals-row-overhead th { background:#fed; }"
             " .ns-totals th { background:#f5f5f5; }"
             " .legend-box.totals-row-main { background: #dfe; }"
-            " .legend-box.totals-row-all { background: #def; }"
-            " .legend-box.totals-row-overhead { background: #fed; }"
             " .legend-box.ns-totals { background: #f5f5f5; }"
             " .section-separator td { background:#fff; border:0; height:14px; }"
         )
-        # Pass the additional CSS (structural row highlighting + legend swatches) into wrapper
         return wrap_html_document(title, parts, additional_css)
 
     def _generate_excel_report(self, title: str, table_data: Dict[str, Any], out_path: str) -> None:
@@ -617,103 +545,164 @@ class CapacityReport(ReportGenerator):
             cell.border = border
             cell.alignment = Alignment(horizontal='center')
         
-        # Write data rows with proper conditional formatting using rules engine
+        # Write data rows grouped by namespace with namespace totals
         from data_gatherer.reporting.common import get_rules_engine
+        from openpyxl.comments import Comment
+        from itertools import groupby
+        
         rules_engine = get_rules_engine()
         
-        for row_num, row_data in enumerate(table_rows, 4):
-            # Build row_data dictionary for rules engine
-            row_dict = {headers[i]: row_data[i] for i in range(min(len(headers), len(row_data)))}
-            
-            for col_num, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_num, value=value)
-                cell.border = border
-                
-                # Apply conditional formatting using rules engine (same as HTML)
-                if col_num <= len(headers):
-                    column_name = headers[col_num - 1]
-                    context = {
-                        'cell_value': str(value),
-                        'column_name': column_name,
-                        'row_data': row_dict,
-                        'report_type': 'container-capacity'
-                    }
-                    result = rules_engine.evaluate_cell(context)
-                    
-                    # Apply formatting based on rule result
-                    if result.rule_type.value == 'error_miss':
-                        cell.fill = error_fill
-                        cell.font = error_font
-                        if result.message:
-                            # Add comment for tooltip-like functionality in Excel
-                            from openpyxl.comments import Comment
-                            cell.comment = Comment(result.message, "Data Gatherer")
-                    elif result.rule_type.value == 'warning_miss':
-                        cell.fill = warning_fill
-                        cell.font = warning_font
-                        if result.message:
-                            from openpyxl.comments import Comment
-                            cell.comment = Comment(result.message, "Data Gatherer")
-                    elif result.rule_type.value == 'error_misconf':
-                        cell.fill = error_misconf_fill
-                        cell.font = error_misconf_font
-                        if result.message:
-                            from openpyxl.comments import Comment
-                            cell.comment = Comment(result.message, "Data Gatherer")
-                    elif result.rule_type.value == 'warning_misconf':
-                        cell.fill = warning_misconf_fill
-                        cell.font = warning_misconf_font
-                        if result.message:
-                            from openpyxl.comments import Comment
-                            cell.comment = Comment(result.message, "Data Gatherer")
-                
-                # Right-align numeric columns
-                if col_num >= 6:  # Numeric columns
-                    cell.alignment = Alignment(horizontal='right')
+        # Sort table rows by namespace, kind, name, container
+        table_rows_sorted = sorted(table_rows, key=lambda r: (r[1], r[0], r[2], r[3]))
         
-        # Add totals section
+        # Styles for namespace totals rows
+        ns_totals_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+        ns_totals_font = Font(bold=True)
+        
+        current_row = 4  # Start after headers
+        
+        # Process rows grouped by namespace
+        for ns, rows_group in groupby(table_rows_sorted, key=lambda r: r[1]):
+            rows_list = list(rows_group)
+            
+            # Write namespace header row
+            ns_header_cell = ws.cell(row=current_row, column=1, value=ns or "")
+            ns_header_cell.font = Font(bold=True)
+            ns_header_cell.border = border
+            ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=14)
+            current_row += 1
+            
+            # Write workload rows for this namespace
+            for row_data in rows_list:
+                # Build row_data dictionary for rules engine
+                row_dict = {headers[i]: row_data[i] for i in range(min(len(headers), len(row_data)))}
+                
+                for col_num, value in enumerate(row_data, 1):
+                    cell = ws.cell(row=current_row, column=col_num, value=value)
+                    cell.border = border
+                    
+                    # Apply conditional formatting using rules engine (same as HTML)
+                    if col_num <= len(headers):
+                        column_name = headers[col_num - 1]
+                        context = {
+                            'cell_value': str(value),
+                            'column_name': column_name,
+                            'row_data': row_dict,
+                            'report_type': 'container-capacity'
+                        }
+                        result = rules_engine.evaluate_cell(context)
+                        
+                        # Apply formatting based on rule result
+                        if result.rule_type.value == 'error_miss':
+                            cell.fill = error_fill
+                            cell.font = error_font
+                            if result.message:
+                                cell.comment = Comment(result.message, "Data Gatherer")
+                        elif result.rule_type.value == 'warning_miss':
+                            cell.fill = warning_fill
+                            cell.font = warning_font
+                            if result.message:
+                                cell.comment = Comment(result.message, "Data Gatherer")
+                        elif result.rule_type.value == 'error_misconf':
+                            cell.fill = error_misconf_fill
+                            cell.font = error_misconf_font
+                            if result.message:
+                                cell.comment = Comment(result.message, "Data Gatherer")
+                        elif result.rule_type.value == 'warning_misconf':
+                            cell.fill = warning_misconf_fill
+                            cell.font = warning_misconf_font
+                            if result.message:
+                                cell.comment = Comment(result.message, "Data Gatherer")
+                    
+                    # Right-align numeric columns
+                    if col_num >= 6:  # Numeric columns
+                        cell.alignment = Alignment(horizontal='right')
+                
+                current_row += 1
+            
+            # Calculate and write namespace totals row
+            if rows_list:
+                ns_main_cpu_raw = sum((int(r[6]) for r in rows_list if r[4] == 'main' and r[6] != ''), 0)
+                ns_main_cpu_lim_raw = sum((int(r[7]) for r in rows_list if r[4] == 'main' and r[7] != ''), 0)
+                ns_main_mem_raw = sum((int(r[8]) for r in rows_list if r[4] == 'main' and r[8] != ''), 0)
+                ns_main_mem_lim_raw = sum((int(r[9]) for r in rows_list if r[4] == 'main' and r[9] != ''), 0)
+                ns_main_cpu_total = sum((int(r[10]) for r in rows_list if r[4] == 'main' and r[10] != ''), 0)
+                ns_main_cpu_lim_total = sum((int(r[11]) for r in rows_list if r[4] == 'main' and r[11] != ''), 0)
+                ns_main_mem_total = sum((int(r[12]) for r in rows_list if r[4] == 'main' and r[12] != ''), 0)
+                ns_main_mem_lim_total = sum((int(r[13]) for r in rows_list if r[4] == 'main' and r[13] != ''), 0)
+                
+                # Shared multiline comments (also used for HTML tooltips) built via helper
+                comments = self._namespace_totals_comments(ns or '', {
+                    'CPU_req_m': ns_main_cpu_raw,
+                    'CPU_lim_m': ns_main_cpu_lim_raw,
+                    'Mem_req_Mi': ns_main_mem_raw,
+                    'Mem_lim_Mi': ns_main_mem_lim_raw,
+                    'CPU_req_m_total': ns_main_cpu_total,
+                    'CPU_lim_m_total': ns_main_cpu_lim_total,
+                    'Mem_req_Mi_total': ns_main_mem_total,
+                    'Mem_lim_Mi_total': ns_main_mem_lim_total,
+                })
+                
+                # Write namespace totals label
+                ns_label_cell = ws.cell(row=current_row, column=1, value="Namespace totals")
+                ns_label_cell.font = ns_totals_font
+                ns_label_cell.fill = ns_totals_fill
+                ns_label_cell.border = border
+                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=6)
+                
+                # Write namespace totals values with individual formula comments on each cell
+                totals_values = [
+                    (7, ns_main_cpu_raw, comments['CPU_req_m']),
+                    (8, ns_main_cpu_lim_raw, comments['CPU_lim_m']),
+                    (9, ns_main_mem_raw, comments['Mem_req_Mi']),
+                    (10, ns_main_mem_lim_raw, comments['Mem_lim_Mi']),
+                    (11, ns_main_cpu_total, comments['CPU_req_m_total']),
+                    (12, ns_main_cpu_lim_total, comments['CPU_lim_m_total']),
+                    (13, ns_main_mem_total, comments['Mem_req_Mi_total']),
+                    (14, ns_main_mem_lim_total, comments['Mem_lim_Mi_total'])
+                ]
+                
+                for col_num, value, comment_text in totals_values:
+                    cell = ws.cell(row=current_row, column=col_num, value=value)
+                    cell.font = ns_totals_font
+                    cell.fill = ns_totals_fill
+                    cell.border = border
+                    cell.alignment = Alignment(horizontal='right')
+                    
+                    # Add descriptive comment to each totals cell
+                    cell.comment = Comment(comment_text, "Data Gatherer")
+                    cell.comment.width = 350
+                    cell.comment.height = 200
+                
+                current_row += 1
+        
+        # Add global totals section (cluster-wide)
         if table_rows:
             main_cpu_raw = aggregates['main_cpu_raw']
             main_mem_raw = aggregates['main_mem_raw']
-            all_cpu_raw = aggregates['all_cpu_raw']
-            all_mem_raw = aggregates['all_mem_raw']
             main_cpu_total = aggregates['main_cpu_total']
             main_mem_total = aggregates['main_mem_total']
-            all_cpu_total = aggregates['all_cpu_total']
-            all_mem_total = aggregates['all_mem_total']
             main_cpu_lim_raw = aggregates['main_cpu_lim_raw']
             main_mem_lim_raw = aggregates['main_mem_lim_raw']
-            all_cpu_lim_raw = aggregates['all_cpu_lim_raw']
-            all_mem_lim_raw = aggregates['all_mem_lim_raw']
             main_cpu_lim_total = aggregates['main_cpu_lim_total']
             main_mem_lim_total = aggregates['main_mem_lim_total']
-            all_cpu_lim_total = aggregates['all_cpu_lim_total']
-            all_mem_lim_total = aggregates['all_mem_lim_total']
             
-            next_row = len(table_rows) + 5
+            # Add spacing row before global totals
+            current_row += 1
             
             # Main containers totals
-            ws.cell(row=next_row, column=1, value="Totals (main containers)").font = Font(bold=True)
-            ws.cell(row=next_row, column=7, value=main_cpu_raw)
-            ws.cell(row=next_row, column=8, value=main_cpu_lim_raw)
-            ws.cell(row=next_row, column=9, value=main_mem_raw)
-            ws.cell(row=next_row, column=10, value=main_mem_lim_raw)
-            ws.cell(row=next_row, column=11, value=main_cpu_total)
-            ws.cell(row=next_row, column=12, value=main_cpu_lim_total)
-            ws.cell(row=next_row, column=13, value=main_mem_total)
-            ws.cell(row=next_row, column=14, value=main_mem_lim_total)
+            ws.cell(row=current_row, column=1, value="Totals (main containers)").font = Font(bold=True)
+            ws.cell(row=current_row, column=7, value=main_cpu_raw)
+            ws.cell(row=current_row, column=8, value=main_cpu_lim_raw)
+            ws.cell(row=current_row, column=9, value=main_mem_raw)
+            ws.cell(row=current_row, column=10, value=main_mem_lim_raw)
+            ws.cell(row=current_row, column=11, value=main_cpu_total)
+            ws.cell(row=current_row, column=12, value=main_cpu_lim_total)
+            ws.cell(row=current_row, column=13, value=main_mem_total)
+            ws.cell(row=current_row, column=14, value=main_mem_lim_total)
             
             # All containers totals
-            next_row += 1
-            ws.cell(row=next_row, column=1, value="Totals (all containers incl. init)").font = Font(bold=True)
-            ws.cell(row=next_row, column=7, value=all_cpu_raw)
-            ws.cell(row=next_row, column=8, value=all_cpu_lim_raw)
-            ws.cell(row=next_row, column=9, value=all_mem_raw)
-            ws.cell(row=next_row, column=10, value=all_mem_lim_raw)
-            ws.cell(row=next_row, column=11, value=all_cpu_total)
-            ws.cell(row=next_row, column=12, value=all_cpu_lim_total)
-            ws.cell(row=next_row, column=13, value=all_mem_total)
-            ws.cell(row=next_row, column=14, value=all_mem_lim_total)
+            current_row += 1
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -729,3 +718,75 @@ class CapacityReport(ReportGenerator):
             ws.column_dimensions[column_letter].width = adjusted_width
         
         wb.save(out_path)
+
+    def _namespace_totals_tooltips(self) -> Dict[str, str]:
+        # Deprecated concise tooltips retained for backward compatibility (currently unused)
+        return {
+            'label': 'Namespace totals (runtime containers only).',
+            'CPU_req_m': 'Sum of per-container CPU requests (m) for main containers (not multiplied by replicas).',
+            'CPU_lim_m': 'Sum of per-container CPU limits (m) for main containers (not multiplied by replicas).',
+            'Mem_req_Mi': 'Sum of per-container memory requests (Mi) for main containers (not multiplied by replicas).',
+            'Mem_lim_Mi': 'Sum of per-container memory limits (Mi) for main containers (not multiplied by replicas).',
+            'CPU_req_m_total': 'Sum(replicas × per-container CPU request) for main containers.',
+            'CPU_lim_m_total': 'Sum(replicas × per-container CPU limit) for main containers.',
+            'Mem_req_Mi_total': 'Sum(replicas × per-container memory request) for main containers.',
+            'Mem_lim_Mi_total': 'Sum(replicas × per-container memory limit) for main containers.'
+        }
+
+    def _namespace_totals_comments(self, ns: str, values: Dict[str, int]) -> Dict[str, str]:
+        """Return unified multi-line comment/tooltip text for namespace totals (HTML + Excel).
+
+        Args:
+            ns: Namespace name (may be empty string)
+            values: Dict of numeric totals keyed by metric name
+        Returns:
+            Dict mapping metric names (and 'label') to multi-line explanatory text.
+        """
+        # Only show MiB, no GiB conversion
+        def fmt_mib(mib: int) -> str:
+            return f"{mib} MiB"
+
+        comments = {
+            'label': f"Namespace totals for '{ns}' (runtime steady-state containers only).",
+            'CPU_req_m': (
+                "CPU Request (per container)\n\n"
+                f"Sum of CPU requests for all main containers in namespace {ns}.\n\n"
+                "Formula: Σ(CPU_req_m) for each main container (not multiplied by replicas)."
+            ),
+            'CPU_lim_m': (
+                "CPU Limit (per container)\n\n"
+                f"Sum of CPU limits for all main containers in namespace {ns}.\n\n"
+                "Formula: Σ(CPU_lim_m) for each main container (not multiplied by replicas)."
+            ),
+            'Mem_req_Mi': (
+                "Memory Request (per container)\n\n"
+                f"Sum of memory requests for all main containers in namespace {ns}.\n\n"
+                "Formula: Σ(Mem_req_Mi) for each main container (not multiplied by replicas)."
+            ),
+            'Mem_lim_Mi': (
+                "Memory Limit (per container)\n\n"
+                f"Sum of memory limits for all main containers in namespace {ns}.\n\n"
+                "Formula: Σ(Mem_lim_Mi) for each main container (not multiplied by replicas)."
+            ),
+            'CPU_req_m_total': (
+                "CPU Request Total (namespace runtime)\n\n"
+                f"Total CPU requests for all running pods in namespace {ns}.\n\n"
+                "Formula: Σ(Replicas × CPU_req_m) for each main container."
+            ),
+            'CPU_lim_m_total': (
+                "CPU Limit Total (namespace runtime)\n\n"
+                f"Total CPU limits for all running pods in namespace {ns}.\n\n"
+                "Formula: Σ(Replicas × CPU_lim_m) for each main container."
+            ),
+            'Mem_req_Mi_total': (
+                "Memory Request Total (namespace runtime)\n\n"
+                f"Total memory requests for all running pods in namespace {ns}.\n\n"
+                "Formula: Σ(Replicas × Mem_req_Mi) for each main container."
+            ),
+            'Mem_lim_Mi_total': (
+                "Memory Limit Total (namespace runtime)\n\n"
+                f"Total memory limits for all running pods in namespace {ns}.\n\n"
+                "Formula: Σ(Replicas × Mem_lim_Mi) for each main container."
+            ),
+        }
+        return comments
