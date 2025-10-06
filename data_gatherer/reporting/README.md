@@ -15,6 +15,45 @@ This directory contains report generators for analyzing OpenShift cluster data s
 
 ---
 
+## Enhanced Worker Node Capacity Evaluation
+
+All capacity reports (cluster-capacity, container-capacity, and containers-config) have been enhanced to provide accurate evaluation of resources available on worker nodes and consumed by workloads:
+
+### Worker Node Identification
+- **Enhanced Logic**: Worker nodes are identified using multiple methods:
+  - Explicit 'worker' role label
+  - Nodes without master/infra roles (to capture nodes with custom or missing role labels)
+- This ensures all worker nodes are counted, even with non-standard labeling
+
+### Workload Coverage
+- **All Workload Types**: Includes Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, and DeploymentConfigs
+- **DaemonSet Handling**: 
+  - DaemonSets are correctly counted as running one pod per eligible worker node
+  - DaemonSets targeting infra or master nodes (via nodeSelector) show 0 replicas for worker capacity
+  - This applies to all three reports: cluster-capacity, container-capacity, and containers-config
+- **Node Placement**: Workloads targeting master or infra nodes via nodeSelector are excluded from worker node calculations
+
+### Resource Calculations
+- **Allocatable Values**: Uses node allocatable resources (already accounts for system-reserved and eviction thresholds)
+- **OpenShift Formula**: Allocatable = Capacity - system-reserved - eviction-thresholds
+- **Replica Accuracy**: 
+  - Properly handles zero-replica deployments
+  - Scales DaemonSets per worker node count
+  - Shows correct total resource consumption (per-pod × replicas)
+
+### Report-Specific DaemonSet Display
+- **cluster-capacity**: Shows aggregated totals per namespace including DaemonSet resources
+- **container-capacity**: Shows per-container resources with replica count and total calculations
+- **containers-config**: Shows replica count for capacity planning and configuration review
+
+### Benefits
+- More accurate capacity utilization percentages
+- Better identification of worker node resource pressure
+- Correct accounting for system daemons and infrastructure workloads
+- Improved capacity planning insights across all reports
+
+---
+
 ## Cell Formatting Rules
 
 Reports apply a unified rules engine to highlight configuration quality issues. Each cell is evaluated against the active rule set and may receive one of the severity classes below.

@@ -212,23 +212,23 @@ class TestContainerCapacityReportDataGeneration:
         """Test individual workload record processing."""
         db, _ = sample_db_with_data
         report = CapacityReport()
-        
+
         # Get a sample record
         from data_gatherer.persistence.workload_queries import WorkloadQueries
         from data_gatherer.reporting.common import CONTAINER_WORKLOAD_KINDS
-        
+
         wq = WorkloadQueries(db)
         rows = wq.list_for_kinds('test-cluster', list(CONTAINER_WORKLOAD_KINDS))
-        
+
         assert len(rows) > 0
         sample_rec = rows[0]  # Get first workload
-        
+
         aggregates = report._initialize_aggregates()
-        processed_rows = report._process_workload_record(sample_rec, aggregates)
-        
+        processed_rows = report._process_workload_record(sample_rec, aggregates, worker_node_count=1)
+
         assert processed_rows is not None
         assert len(processed_rows) > 0
-        
+
         # Each processed row should have correct structure
         for row in processed_rows:
             assert len(row) == 14

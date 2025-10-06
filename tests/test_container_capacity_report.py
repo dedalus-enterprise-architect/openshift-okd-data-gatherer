@@ -224,7 +224,10 @@ class TestContainerCapacityReportDataGeneration:
         sample_rec = rows[0]  # Get first workload
         
         aggregates = report._initialize_aggregates()
-        processed_rows = report._process_workload_record(sample_rec, aggregates)
+        # Get worker node count for DaemonSet calculations
+        node_capacity = report._get_node_capacity(db, 'test-cluster')
+        worker_node_count = node_capacity.get('worker_node_count', 0)
+        processed_rows = report._process_workload_record(sample_rec, aggregates, worker_node_count)
         
         assert processed_rows is not None
         assert len(processed_rows) > 0

@@ -1,10 +1,10 @@
 from __future__ import annotations
 import html
 from typing import List, Dict, Any, Tuple, Optional
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
 	cpu_to_milli, mem_to_mi,
 	build_legend_html, wrap_html_document,
 	CONTAINER_WORKLOAD_KINDS, extract_pod_spec, get_replicas_for_workload
@@ -76,6 +76,10 @@ class ClusterCapacityReport(ReportGenerator):
 		"""
 		Process workload data to generate namespace-level resource totals.
 		
+		Enhanced to:
+		- Properly handle DaemonSets (count per eligible worker node)
+		- Filter workloads that won't run on worker nodes
+		
 		Args:
 			db: Database connection
 			cluster: Cluster name
@@ -85,6 +89,10 @@ class ClusterCapacityReport(ReportGenerator):
 		"""
 		wq = WorkloadQueries(db)
 		rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
+		
+		# Get worker node count for DaemonSet calculations
+		node_capacity = self._get_node_capacity(db, cluster)
+		worker_node_count = node_capacity.get('worker_node_count', 0)
 		
 		ns_totals: Dict[str, Dict[str, int]] = {}
 		
@@ -98,10 +106,25 @@ class ClusterCapacityReport(ReportGenerator):
 			if not pod_spec:
 				continue
 			
-			# Fix: Use actual replica count including zero, don't default to 1
-			replicas = get_replicas_for_workload(kind, manifest)
-			if replicas is None:
-				replicas = 1  # If replica count is missing, default to 1 (but allow 0)
+			# Check if this workload will run on worker nodes
+			if not self._will_run_on_worker(pod_spec):
+				continue
+			
+			# Calculate replicas based on workload type
+			if kind == 'DaemonSet':
+				# DaemonSets run one pod per eligible node
+				node_selector = pod_spec.get('nodeSelector', {})
+				if node_selector:
+					# For now, we can't determine exact eligible nodes without node label data
+					# Conservative approach: assume it runs on all worker nodes
+					replicas = worker_node_count
+				else:
+					replicas = worker_node_count
+			else:
+				# For other workload types, use standard replica calculation
+				replicas = get_replicas_for_workload(kind, manifest)
+				if replicas is None:
+					replicas = 1  # Default to 1 if not specified
 			
 			# Initialize namespace totals if not exists
 			if namespace not in ns_totals:
@@ -112,6 +135,29 @@ class ClusterCapacityReport(ReportGenerator):
 				self._process_container_resources(cdef, replicas, ns_totals[namespace])
 		
 		return ns_totals
+	
+	def _will_run_on_worker(self, pod_spec: Dict[str, Any]) -> bool:
+		"""
+		Determine if a pod will run on worker nodes based on node selectors.
+		
+		Args:
+			pod_spec: Pod specification from workload manifest
+			
+		Returns:
+			True if pod can run on worker nodes, False otherwise
+		"""
+		node_selector = pod_spec.get('nodeSelector', {})
+		
+		# If specifically targeting master or infra nodes, it won't run on workers
+		if 'node-role.kubernetes.io/master' in node_selector:
+			return False
+		if 'node-role.kubernetes.io/control-plane' in node_selector:
+			return False
+		if 'node-role.kubernetes.io/infra' in node_selector:
+			return False
+		
+		# If no restricting node selector, or if explicitly targeting workers, it will run on workers
+		return True
 
 	def _process_container_resources(self, cdef: Dict[str, Any], replicas: int, ns_total: Dict[str, int]) -> None:
 		"""
@@ -145,33 +191,46 @@ class ClusterCapacityReport(ReportGenerator):
 		"""
 		Retrieve and aggregate worker node capacity information.
 		
+		Enhanced to identify worker nodes using multiple methods:
+		- Explicit 'worker' role
+		- Nodes without master/infra roles
+		
+		Uses allocatable values which already account for:
+		- System-reserved resources
+		- Eviction thresholds
+		As per OpenShift formula: Allocatable = Capacity - system-reserved - eviction-thresholds
+		
 		Args:
 			db: Database connection
 			cluster: Cluster name
 			
 		Returns:
-			Dictionary with total CPU and memory allocatable/capacity
+			Dictionary with total CPU and memory allocatable/capacity and worker node count
 		"""
 		try:
 			cur = db._conn.cursor()
+			# Enhanced query: Include nodes marked as worker OR nodes that are not master/infra
 			node_rows = cur.execute(
-				"""SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity
+				"""SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity, node_role
 				   FROM node_capacity
-				   WHERE cluster=? AND deleted=0 AND node_role='worker'""",
+				   WHERE cluster=? AND deleted=0 
+				   AND (node_role='worker' OR (node_role NOT IN ('master', 'infra')))""",
 				(cluster,)
 			).fetchall()
 		except Exception:
 			node_rows = []
 
 		total_cpu_alloc = total_mem_alloc = 0
+		worker_node_count = len(node_rows)
 		
-		for cpu_alloc, mem_alloc, cpu_cap, mem_cap in node_rows:
+		for cpu_alloc, mem_alloc, cpu_cap, mem_cap, node_role in node_rows:
 			total_cpu_alloc += (cpu_to_milli(cpu_alloc) or cpu_to_milli(cpu_cap) or 0)
 			total_mem_alloc += (mem_to_mi(mem_alloc) or mem_to_mi(mem_cap) or 0)
 
 		return {
 			'total_cpu_alloc': total_cpu_alloc,
-			'total_mem_alloc': total_mem_alloc
+			'total_mem_alloc': total_mem_alloc,
+			'worker_node_count': worker_node_count
 		}
 
 	def _calculate_summary_totals(self, ns_totals: Dict[str, Dict[str, int]]) -> Dict[str, int]:

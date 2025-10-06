@@ -7,9 +7,9 @@ This document summarizes the logic of data extraction, conditional choices, rule
 | Report Type           | Extraction Source/Method                | Filtering Applied                | Conditional Choices |
 |---------------------- |-----------------------------------------|----------------------------------|---------------------|
 | summary               | WorkloadDB, all workloads               | None (all resources included)     | None                |
-| container-capacity    | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | If replica missing, default to 1; else use actual (can be 0) |
-| cluster-capacity      | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | If replica missing, default to 1; else use actual (can be 0) |
-| containers-config     | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | None                |
+| container-capacity    | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | If DaemonSet, use worker node count (or 0 if targeting infra/master); else if replica missing, default to 1; else use actual (can be 0) |
+| cluster-capacity      | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | If DaemonSet, use worker node count (or 0 if targeting infra/master); else if replica missing, default to 1; else use actual (can be 0) |
+| containers-config     | WorkloadDB, CONTAINER_WORKLOAD_KINDS    | Includes 0-replica resources      | If DaemonSet, use worker node count (or 0 if targeting infra/master); else use actual (can be 0) |
 | nodes                 | NodeDB, all nodes                       | None (all nodes included)         | None                |
 
 ## 2. Rules of evaluation
@@ -36,6 +36,11 @@ This document summarizes the logic of data extraction, conditional choices, rule
 | containers-config     | No math, configuration listing only                    | Per container     |
 | summary               | Counts, basic stats                                   | Per cluster       |
 | nodes                 | Capacity, allocatable, totals                         | Per node, cluster |
+
+**DaemonSet Calculation Logic:**
+- For DaemonSets, replicas = number of worker nodes (unless nodeSelector targets infra/master, then replicas = 0)
+- Per-pod resources are multiplied by replicas for total resource consumption
+- NodeSelector filtering ensures only workloads running on worker nodes are included in worker capacity calculations
 
 ### Example calculation (container-capacity):
 - CPU_req_m_total = CPU_req_m * replicas

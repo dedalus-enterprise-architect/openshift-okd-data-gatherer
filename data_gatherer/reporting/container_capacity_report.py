@@ -1,10 +1,10 @@
 from __future__ import annotations
 import html
 from typing import List, Dict, Any, Optional, Tuple
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
     extract_pod_spec, get_replicas_for_workload,
     build_legend_html, wrap_html_document,
@@ -62,11 +62,15 @@ class CapacityReport(ReportGenerator):
         wq = WorkloadQueries(db)
         rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
         
+        # Get worker node count for DaemonSet calculations
+        node_capacity = self._get_node_capacity(db, cluster)
+        worker_node_count = node_capacity.get('worker_node_count', 0)
+        
         table_rows: List[List] = []
         aggregates = self._initialize_aggregates()
         
         for rec in rows:
-            processed_rows = self._process_workload_record(rec, aggregates)
+            processed_rows = self._process_workload_record(rec, aggregates, worker_node_count)
             if processed_rows:
                 table_rows.extend(processed_rows)
         
@@ -80,7 +84,7 @@ class CapacityReport(ReportGenerator):
             'table_rows': table_rows,
             'headers': headers,
             'aggregates': aggregates,
-            'node_capacity': self._get_node_capacity(db, cluster)
+            'node_capacity': node_capacity
         }
 
     def _initialize_aggregates(self) -> Dict[str, int]:
@@ -92,13 +96,14 @@ class CapacityReport(ReportGenerator):
             'main_cpu_lim_total': 0, 'main_mem_lim_total': 0, 'all_cpu_lim_total': 0, 'all_mem_lim_total': 0
         }
 
-    def _process_workload_record(self, rec: Dict[str, Any], aggregates: Dict[str, int]) -> Optional[List[List]]:
+    def _process_workload_record(self, rec: Dict[str, Any], aggregates: Dict[str, int], worker_node_count: int) -> Optional[List[List]]:
         """
         Process a single workload record into table rows.
         
         Args:
             rec: Workload record from database
             aggregates: Aggregate counters to update
+            worker_node_count: Number of worker nodes for DaemonSet calculations
             
         Returns:
             List of table rows for this workload, or None if invalid
@@ -111,10 +116,18 @@ class CapacityReport(ReportGenerator):
         pod_spec = extract_pod_spec(kind, manifest)
         if not pod_spec:
             return None
-            
-        replicas = get_replicas_for_workload(kind, manifest)
-        if replicas is None:
-            replicas = 1  # If replica count is missing, default to 1 (but allow 0)
+        
+        # Calculate replicas with DaemonSet support
+        if kind == 'DaemonSet':
+            # Check if this DaemonSet will run on worker nodes
+            if not self._will_run_on_worker(pod_spec):
+                replicas = 0
+            else:
+                replicas = worker_node_count
+        else:
+            replicas = get_replicas_for_workload(kind, manifest)
+            if replicas is None:
+                replicas = 1  # If replica count is missing, default to 1 (but allow 0)
         containers = [(c, 'main') for c in pod_spec.get('containers', [])]
         containers += [(c, 'init') for c in pod_spec.get('initContainers', [])]
         
@@ -229,16 +242,43 @@ class CapacityReport(ReportGenerator):
                     aggregates['main_mem_lim_raw'] += mem_lim
                     aggregates['main_mem_lim_total'] += mem_lim_total
 
+    def _will_run_on_worker(self, pod_spec: Dict[str, Any]) -> bool:
+        """
+        Determine if a pod will run on worker nodes based on node selectors.
+        
+        Args:
+            pod_spec: Pod specification from workload manifest
+            
+        Returns:
+            True if pod can run on worker nodes, False otherwise
+        """
+        node_selector = pod_spec.get('nodeSelector', {})
+        
+        # If specifically targeting master or infra nodes, it won't run on workers
+        if 'node-role.kubernetes.io/master' in node_selector:
+            return False
+        if 'node-role.kubernetes.io/control-plane' in node_selector:
+            return False
+        if 'node-role.kubernetes.io/infra' in node_selector:
+            return False
+        
+        # If no restricting node selector, or if explicitly targeting workers, it will run on workers
+        return True
+
     def _get_node_capacity(self, db: WorkloadDB, cluster: str) -> Dict[str, int]:
         """
         Retrieve and parse worker node capacity information.
+        
+        Enhanced to identify worker nodes using multiple methods:
+        - Explicit 'worker' role
+        - Nodes without master/infra roles
         
         Args:
             db: Database connection
             cluster: Cluster name
             
         Returns:
-            Dictionary with parsed capacity values
+            Dictionary with parsed capacity values and worker node count
         """
         try:
             cur = db._conn.cursor()
@@ -251,18 +291,23 @@ class CapacityReport(ReportGenerator):
             node_rows = []
 
         worker_cpu_cap = worker_cpu_alloc = worker_mem_cap = worker_mem_alloc = 0
+        worker_node_count = 0
         for nr in node_rows:
-            if (nr[4] or '').lower() == 'worker':
+            node_role = (nr[4] or '').lower()
+            # Include worker nodes OR nodes that are not master/infra
+            if node_role == 'worker' or (node_role not in ('master', 'infra')):
                 worker_cpu_cap += self._parse_cpu_capacity(nr[0])
                 worker_cpu_alloc += self._parse_cpu_capacity(nr[1])
                 worker_mem_cap += self._parse_memory_capacity(nr[2])
                 worker_mem_alloc += self._parse_memory_capacity(nr[3])
+                worker_node_count += 1
 
         return {
             'worker_cpu_cap': worker_cpu_cap,
             'worker_cpu_alloc': worker_cpu_alloc,
             'worker_mem_cap': worker_mem_cap,
-            'worker_mem_alloc': worker_mem_alloc
+            'worker_mem_alloc': worker_mem_alloc,
+            'worker_node_count': worker_node_count
         }
 
     def _parse_cpu_capacity(self, val: Optional[str]) -> int:
@@ -603,7 +648,7 @@ class CapacityReport(ReportGenerator):
             cell.alignment = Alignment(horizontal='center')
         
         # Write data rows with proper conditional formatting using rules engine
-        from .common import get_rules_engine
+        from data_gatherer.reporting.common import get_rules_engine
         rules_engine = get_rules_engine()
         
         for row_num, row_data in enumerate(table_rows, 4):
