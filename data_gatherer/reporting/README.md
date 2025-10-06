@@ -50,6 +50,48 @@ Rules are defined in `rules/official_rules.py` and dispatched through the rules 
 
 Reports are generated via the main CLI `report` subcommand. You can target one or many clusters.
 
+### Report Command Output & Combination Rules
+
+The `report` command now supports flexible combinations of `--all`, `--format`, and `--out`:
+
+| Scenario | Example | Behavior |
+|----------|---------|----------|
+| Single cluster, single report, default format | `report --cluster prod --type summary` | Writes to `clusters/prod/reports/<prefix><timestamp>.html` |
+| Single cluster, single report, explicit file | `report --cluster prod --type container-capacity --format excel --out /tmp/cc.xlsx` | Writes exactly to `/tmp/cc.xlsx` |
+| Single cluster, all reports (HTML default) | `report --cluster prod --all` | Generates every registered type (one file per type) into `clusters/prod/reports/` |
+| Single cluster, all reports, override format & custom dir | `report --cluster prod --all --format excel --out /tmp/prod-reports` | Creates directory if missing; one Excel per report type |
+| Multi-cluster, single report | `report --cluster prod --cluster staging --type summary` | One file per cluster under each cluster's `reports/` dir |
+| Multi-cluster, all reports to shared dir | `report --all-clusters --all --out /tmp/all-reports` | One file per (cluster,type) in given directory |
+| Multi-cluster, format override | `report --all-clusters --all --format excel --out ./reports-all` | Forces Excel where supported; skips format override where not supported |
+
+#### `--out` Semantics
+* If multiple outputs will be produced (because of `--all` and/or multiple clusters), `--out` must point to a directory (it will be created if absent).
+* If only one output will be produced, `--out` may be either a file path or a directory.
+* When a directory is used for multiple outputs, filenames follow:
+	` <prefix><report-type>-<cluster>-<timestamp>.<ext>`
+	(Example: `summary-summary-prod-20250101T101500.html`)
+
+#### `--format` Override
+* Applies globally to all targeted report types for the invocation.
+* If a report does not support the requested format, it falls back to its first supported format and logs a notice (the run continues).
+
+#### Examples
+Generate all reports for a single cluster into a custom directory in Excel:
+```bash
+python -m data_gatherer.run report --cluster prod --all --format excel --out ./excel-reports
+```
+Generate all reports for every configured cluster into a shared directory:
+```bash
+python -m data_gatherer.run report --all-clusters --all --out /tmp/all-reports
+```
+Single summary report for two clusters, forcing HTML into default per-cluster locations:
+```bash
+python -m data_gatherer.run report --cluster prod --cluster staging --type summary --format html
+```
+Explicit single output file path:
+```bash
+```
+
 ### Getting Help
 
 Use the custom `help` command to list all available commands or get detailed help for a specific command:
@@ -60,30 +102,4 @@ python -m data_gatherer.run help
 
 # Show help for a specific command (e.g., report)
 python -m data_gatherer.run help report
-```
-
-### Report Generation Examples
-
-```bash
-# List available report types
-python -m data_gatherer.run report --list-types
-
-# Single cluster: generate every report type
-python -m data_gatherer.run report --cluster my-cluster --all
-
-# Single cluster: only container capacity report
-python -m data_gatherer.run report --cluster my-cluster --type container-capacity
-
-# Two clusters: container capacity report each
-python -m data_gatherer.run report --cluster prod --cluster staging --type container-capacity
-
-# All configured clusters: all report types
-python -m data_gatherer.run report --all-clusters --all
-
-# Explicit output path (single cluster only)
-# --out now accepts either a full file path or a directory. If a directory is given, the tool will generate a default filename inside it (using the report's filename_prefix and a timestamp).
-python -m data_gatherer.run report --cluster prod --type summary --out /tmp/prod-summary.html
-
-# Example: pass a directory to --out
-python -m data_gatherer.run report --cluster prod --type summary --out /tmp/reports/
 ```
