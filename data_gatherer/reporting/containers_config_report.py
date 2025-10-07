@@ -10,6 +10,7 @@ from data_gatherer.reporting.common import (
 )
 import html
 import os
+from data_gatherer.reporting.common import will_run_on_worker
 
 
 @register
@@ -48,6 +49,9 @@ class ContainerConfigurationReport(ReportGenerator):
             manifest = rec['manifest']
             pod_spec = extract_pod_spec(kind, manifest)
             if not pod_spec:
+                continue
+            # Filter out workloads targeting master or infra nodes
+            if not will_run_on_worker(pod_spec):
                 continue
             
             # Use shared calculation logic for consistency across all reports
