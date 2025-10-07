@@ -196,12 +196,12 @@ def sync(ctx, clusters, all_clusters, kind):
     click.echo(json.dumps(aggregate if len(aggregate) > 1 else next(iter(aggregate.values())), indent=2))
 
 @cli.command(add_help_option=False)
-@click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to report on (repeatable)')
+@click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to report on')
 @click.option('--all-clusters', is_flag=True, help='Generate reports for all configured clusters')
-@click.option('--type', 'report_type', default='summary', help='Single report type (ignored if --all). Use --list-types to view all.')
-@click.option('--format', 'output_format', default='html', help='Force output format for generated reports (html, excel). When omitted uses each report default / first supported.')
-@click.option('--out', required=False, help='Output path. For single output: file or directory. For multiple outputs (--all or multi-cluster) must be a directory. Missing directories will be created.')
-@click.option('--all', is_flag=True, help='Generate all available report types (overrides --type)')
+@click.option('--type', 'report_type', default='summary', help='Report type (default: summary). Use --list-types to view all.')
+@click.option('--format', 'output_format', default='html', help='Output format (html, excel). Default: html')
+@click.option('--out', required=False, help='Explicit output file path or directory (single-cluster only). If a directory is given, a default filename will be generated inside it.')
+@click.option('--all', is_flag=True, help='Generate all available report types')
 @click.option('--list-types', is_flag=True, help='List available report types and exit')
 @click.pass_context
 def report(ctx, clusters, all_clusters, report_type, output_format, out, all, list_types):
@@ -210,146 +210,138 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
     from .reporting import summary_report  # noqa: F401
     from .reporting import containers_config_report  # noqa: F401
     from .reporting import nodes_report  # noqa: F401
-    # Import both capacity-related reports so their @register decorators run
-    from .reporting import container_capacity_report  # noqa: F401 registers 'container-capacity'
     from .reporting import cluster_capacity_report  # noqa: F401 registers 'cluster-capacity'
     if list_types:
         click.echo('Available report types:')
         for t in get_report_types():
             click.echo(f'  {t}')
         return
-    # Normalize clusters
+    if all and out:
+        raise click.ClickException('Cannot specify --out with --all flag.')
+    if all and report_type != 'summary':
+        raise click.ClickException('Cannot specify --type with --all flag.')
     config = ctx.obj['config']
     cfg = load_config(config)
     log.configure_logging(cfg.logging.level, cfg.logging.format)
     if not clusters and not all_clusters and not list_types:
         raise click.ClickException('Specify at least one --cluster or --all-clusters')
     cluster_list = [c.name for c in cfg.clusters] if all_clusters else list(clusters)
-    # Determine report set
-    available_types = get_report_types()
-    if all:
-        selected_types = available_types
-    else:
-        if report_type not in available_types:
-            raise click.ClickException(f'Unknown report type: {report_type}')
-        selected_types = [report_type]
-
-    multi_cluster = len(cluster_list) > 1
-    multi_type = len(selected_types) > 1
-    multiple_outputs = multi_cluster or multi_type
-
-    # Validate --out usage
-    if out:
-        if multiple_outputs:
-            # Must be a directory (existing or creatable)
-            if os.path.exists(out) and not os.path.isdir(out):
-                raise click.ClickException('--out must be a directory when multiple reports are generated (multi-cluster or --all).')
-        # If path ends with os.sep hint treat as directory
-        if multiple_outputs and not os.path.exists(out):
-            try:
-                os.makedirs(out, exist_ok=True)
-            except Exception as e:
-                raise click.ClickException(f'Failed to create output directory {out}: {e}')
-    else:
-        # If no out specified and multiple outputs, we will use per-cluster report dirs
-        pass
-
-    def sanitize(s: str) -> str:
-        return ''.join(c if c.isalnum() or c in ('-', '_') else '-' for c in s)
-
-    from datetime import datetime
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    generated = []
-    failures = []
-
-    def choose_format(gen):
-        supported = getattr(gen, 'supported_formats', ['html'])
-        if output_format:
-            if output_format in supported:
-                return output_format
-            else:
-                click.echo(f'  ! Skipping format override for {getattr(gen, "type_name", "unknown")} (unsupported: {output_format}); using {supported[0]}')
-        return supported[0]
-
-    def build_output_path(cluster: str, gen, rtype: str, fmt: str) -> str:
-        file_ext = _get_file_extension(fmt, gen)
-        cluster_part = sanitize(cluster)
-        type_part = sanitize(rtype)
-        # Multiple outputs -> always include cluster & type in filename for uniqueness
-        if multiple_outputs:
-            base_dir = out if (out and os.path.isdir(out)) else (
-                out if (out and not os.path.exists(out) and multiple_outputs) else None)
-            if base_dir is None:
-                # fall back to per-cluster default dir
-                base_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
-            os.makedirs(base_dir, exist_ok=True)
-            return os.path.join(base_dir, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
-        # Single output:
-        if out:
+    # single cluster path below
+    if len(cluster_list) == 1:
+        cluster = cluster_list[0]
+        try:
+            get_cluster_cfg(cfg, cluster)
+        except ValueError as e:
+            raise click.ClickException(str(e))
+        paths = get_cluster_paths(cfg, cluster)
+        if not os.path.exists(paths.db_path):
+            raise click.ClickException('Cluster not initialized. Run init first.')
+        db = WorkloadDB(paths.db_path)
+        if all:
+            reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
+            os.makedirs(reports_dir, exist_ok=True)
+            ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+            generated_reports = []
+            available_types = get_report_types()
+            for current_type in available_types:
+                try:
+                    generator = get_generator(current_type)
+                    prefix = getattr(generator, 'filename_prefix', 'report-')
+                    supported_formats = getattr(generator, 'supported_formats', ['html'])
+                    # Use requested output_format if supported, else fallback to HTML
+                    if output_format in supported_formats:
+                        format_to_use = output_format
+                    else:
+                        format_to_use = 'html' if 'html' in supported_formats else supported_formats[0]
+                    file_ext = _get_file_extension(format_to_use, generator)
+                    current_out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
+                    click.echo(f'Generating {current_type} report...')
+                    if format_to_use != output_format:
+                        click.echo(f'  Skipping {current_type}: does not support {output_format} format')
+                        continue
+                    if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+                        generator.generate(db, cluster, current_out, format_to_use)
+                    else:
+                        generator.generate(db, cluster, current_out)
+                    generated_reports.append(current_out)
+                    click.echo(f'  ✓ Wrote {current_type} report to {current_out}')
+                except Exception as e:
+                    click.echo(f'  ✗ Failed to generate {current_type} report: {e}')
+                    continue
+            click.echo(f'\nGenerated {len(generated_reports)} reports successfully.')
+            return
+        try:
+            generator = get_generator(report_type)
+        except ValueError as e:
+            raise click.ClickException(str(e))
+        
+        # Validate format support
+        supported_formats = getattr(generator, 'supported_formats', ['html'])
+        if output_format not in supported_formats:
+            raise click.ClickException(f'Report type {report_type} does not support format {output_format}. Supported: {", ".join(supported_formats)}')
+        
+        # If out is not provided, use default reports dir and filename
+        if not out:
+            reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
+            os.makedirs(reports_dir, exist_ok=True)
+            ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+            prefix = getattr(generator, 'filename_prefix', 'report-')
+            file_ext = _get_file_extension(output_format, generator)
+            out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
+        else:
+            # If out is a directory, construct default filename inside it
             if os.path.isdir(out):
-                return os.path.join(out, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
-            else:
-                # user provided explicit filename
-                return out
-        # default single cluster dir
-        base_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
-        os.makedirs(base_dir, exist_ok=True)
-        return os.path.join(base_dir, f'{type_part}-{cluster_part}-{timestamp}{file_ext}')
-
+                ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+                prefix = getattr(generator, 'filename_prefix', 'report-')
+                file_ext = _get_file_extension(output_format, generator)
+                out = os.path.join(out, f'{prefix}{ts}{file_ext}')
+        # Call generate with format parameter if supported
+        if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+            generator.generate(db, cluster, out, output_format)
+        else:
+            generator.generate(db, cluster, out)
+        click.echo(f'Wrote {report_type} report to {out}')
+        return
+    # multi-cluster path
+    if out:
+        raise click.ClickException('--out is only valid for single cluster usage')
     for cluster in cluster_list:
         try:
             get_cluster_cfg(cfg, cluster)
         except ValueError as e:
-            failures.append((cluster, '*', str(e)))
-            continue
+            raise click.ClickException(str(e))
         paths = get_cluster_paths(cfg, cluster)
         if not os.path.exists(paths.db_path):
-            failures.append((cluster, '*', 'Cluster not initialized'))
             click.echo(f'Skipping {cluster}: not initialized')
             continue
         db = WorkloadDB(paths.db_path)
-        for rtype in selected_types:
+        reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
+        os.makedirs(reports_dir, exist_ok=True)
+        ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+        if all:
+            types = get_report_types()
+        else:
+            types = [report_type]
+        for t in types:
             try:
-                gen = get_generator(rtype)
+                generator = get_generator(t)
             except ValueError as e:
-                failures.append((cluster, rtype, str(e)))
-                click.echo(f'[{cluster}] ! Skipping {rtype}: {e}')
+                click.echo(f'Skipping {cluster} report {t}: {e}')
                 continue
-            # If user requested excel, skip generators that do not support excel
-            if output_format == 'excel':
-                supported = getattr(gen, 'supported_formats', ['html'])
-                if 'excel' not in supported:
-                    click.echo(f'[{cluster}] ! Skipping {rtype}: does not support excel format')
-                    failures.append((cluster, rtype, 'excel format not supported'))
-                    continue
-            fmt = choose_format(gen)
-            out_path = build_output_path(cluster, gen, rtype, fmt)
-            click.echo(f'[{cluster}] Generating {rtype} ({fmt}) -> {out_path}')
+            prefix = getattr(generator, 'filename_prefix', 'report-')
+            # For multi-cluster, use specified format or default to HTML
+            format_to_use = output_format if hasattr(generator, 'supported_formats') and output_format in generator.supported_formats else 'html'
+            file_ext = _get_file_extension(format_to_use, generator)
+            current_out = os.path.join(reports_dir, f'{prefix}{ts}{file_ext}')
+            click.echo(f'[{cluster}] Generating {t} report...')
             try:
-                if hasattr(gen, 'supported_formats') and len(getattr(gen, 'supported_formats', [])) > 1:
-                    gen.generate(db, cluster, out_path, fmt)
+                if hasattr(generator, 'supported_formats') and len(generator.supported_formats) > 1:
+                    generator.generate(db, cluster, current_out, format_to_use)
                 else:
-                    # Some generators ignore format parameter
-                    gen.generate(db, cluster, out_path)
-                generated.append(out_path)
-                click.echo(f'[{cluster}] ✓ {rtype}')
+                    generator.generate(db, cluster, current_out)
+                click.echo(f'[{cluster}] ✓ {t} -> {current_out}')
             except Exception as e:
-                failures.append((cluster, rtype, str(e)))
-                click.echo(f'[{cluster}] ✗ {rtype}: {e}')
-
-    click.echo('\nSummary:')
-    click.echo(f'  Generated: {len(generated)} file(s)')
-    if generated:
-        for p in generated:
-            click.echo(f'    - {p}')
-    if failures:
-        click.echo(f'  Failures: {len(failures)}')
-        for cluster, rtype, err in failures:
-            click.echo(f'    - {cluster}:{rtype} -> {err}')
-        raise SystemExit(1 if generated == [] else 0)
-    else:
-        click.echo('  Failures: 0')
-    return
+                click.echo(f'[{cluster}] ✗ Failed {t}: {e}')
 
 @cli.command(add_help_option=False)
 @click.pass_context

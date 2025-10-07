@@ -10,7 +10,6 @@ This test suite verifies that:
 import pytest
 from datetime import datetime, timezone
 from data_gatherer.reporting.common import will_run_on_worker, calculate_effective_replicas
-from data_gatherer.reporting.container_capacity_report import CapacityReport as ContainerCapacityReport
 from data_gatherer.reporting.cluster_capacity_report import ClusterCapacityReport
 from data_gatherer.reporting.containers_config_report import ContainerConfigurationReport
 from data_gatherer.persistence.db import WorkloadDB
@@ -54,10 +53,6 @@ class TestSharedLogicConsistency:
     
     def test_no_duplicate_will_run_on_worker_methods(self):
         """Verify that reports don't have their own _will_run_on_worker methods."""
-        # Check container capacity report
-        assert not hasattr(ContainerCapacityReport, '_will_run_on_worker'), \
-            "ContainerCapacityReport should not have _will_run_on_worker method"
-        
         # Check cluster capacity report
         assert not hasattr(ClusterCapacityReport, '_will_run_on_worker'), \
             "ClusterCapacityReport should not have _will_run_on_worker method"

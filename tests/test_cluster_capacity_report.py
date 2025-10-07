@@ -12,7 +12,7 @@ import pytest
 from pathlib import Path
 from datetime import datetime, timezone
 
-from data_gatherer.reporting.container_capacity_report import CapacityReport
+from data_gatherer.reporting.cluster_capacity_report import ClusterCapacityReport
 from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.util.hash import sha256_of_manifest
 
@@ -181,7 +181,7 @@ class TestContainerCapacityReportDataGeneration:
             'main_cpu_lim_raw', 'main_mem_lim_raw',
             'main_cpu_lim_total', 'main_mem_lim_total'
         ]
-        assert set(aggregates.keys()) == set(expected_agg_keys)
+        assert set(aggregates.keys()) == set(expected_agg_keys), f"Unexpected aggregate keys: {aggregates.keys()}"
         for key in expected_agg_keys:
             assert isinstance(aggregates[key], int)
         
@@ -212,23 +212,26 @@ class TestContainerCapacityReportDataGeneration:
         """Test individual workload record processing."""
         db, _ = sample_db_with_data
         report = CapacityReport()
-
+        
         # Get a sample record
         from data_gatherer.persistence.workload_queries import WorkloadQueries
         from data_gatherer.reporting.common import CONTAINER_WORKLOAD_KINDS
-
+        
         wq = WorkloadQueries(db)
         rows = wq.list_for_kinds('test-cluster', list(CONTAINER_WORKLOAD_KINDS))
-
+        
         assert len(rows) > 0
         sample_rec = rows[0]  # Get first workload
-
+        
         aggregates = report._initialize_aggregates()
-        processed_rows = report._process_workload_record(sample_rec, aggregates, worker_node_count=1)
-
+        # Get worker node count for DaemonSet calculations
+        node_capacity = report._get_node_capacity(db, 'test-cluster')
+        worker_node_count = node_capacity.get('worker_node_count', 0)
+        processed_rows = report._process_workload_record(sample_rec, aggregates, worker_node_count)
+        
         assert processed_rows is not None
         assert len(processed_rows) > 0
-
+        
         # Each processed row should have correct structure
         for row in processed_rows:
             assert len(row) == 14
@@ -244,26 +247,21 @@ class TestContainerCapacityReportHTMLGeneration:
         db, _ = sample_db_with_data
         report = CapacityReport()
 
-        # Generate data and HTML
         table_data = report._generate_capacity_data(db, 'test-cluster')
         html_content = report._generate_html_report('Test Report', table_data, 'test-cluster', db)
-
-        # Basic structure checks
         assert '<html>' in html_content
         assert '<h1>Test Report</h1>' in html_content
         assert 'Container Capacity per Namespace' in html_content
         assert 'Namespace Capacity vs Cluster Capacity' in html_content
         assert 'Container Requests vs Allocatable Resources on Worker Nodes' in html_content
 
-        # Check for table headers
         expected_headers = ["Kind", "Namespace", "Name", "Container", "Type", "Replicas"]
         for header in expected_headers:
             assert f'<th>{header}</th>' in html_content
 
-        # Check for namespace grouping
         assert 'production' in html_content
         assert 'storage' in html_content
-        # Check for totals sections
+
         assert 'Totals (main containers)' in html_content
         assert 'All containers incl. init' not in html_content
         assert 'Overhead (init containers)' not in html_content
@@ -481,6 +479,7 @@ class TestContainerCapacityReportResourceCalculations:
             'main_mem_lim_total': 1536,
         }
 
+        # No deprecated all_* keys
         for k in aggregates.keys():
             assert not k.startswith('all_')
     

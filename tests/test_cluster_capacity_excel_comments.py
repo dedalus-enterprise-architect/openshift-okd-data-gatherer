@@ -5,7 +5,7 @@ import pytest
 import tempfile
 import os
 from datetime import datetime, timezone
-from data_gatherer.reporting.container_capacity_report import CapacityReport
+from data_gatherer.reporting.cluster_capacity_report import ClusterCapacityReport
 from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.util.hash import sha256_of_manifest
 

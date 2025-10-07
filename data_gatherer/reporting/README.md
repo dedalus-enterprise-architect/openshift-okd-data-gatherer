@@ -8,26 +8,42 @@ This directory contains report generators for analyzing OpenShift cluster data s
 | Report Type            | File                          | Output Format | Purpose/Focus                                                                 |
 |------------------------|-------------------------------|--------------|------------------------------------------------------------------------------|
 | summary                | summary_report.py             | HTML         | High-level cluster overview, workload counts, node info                       |
-| container-capacity     | container_capacity_report.py  | HTML, Excel  | Per-container resource requests/limits, allocation patterns, risk indicators   |
-### Init Containers Exclusion (Change Note)
-
-As of the init-container exclusion refactor (January 2025), the `container-capacity` report intentionally ignores init containers for all sizing and aggregation metrics. Earlier versions exposed dual aggregates (`main_*` vs `all_*`) plus an implicit init overhead. This proved confusing for runtime capacity planning because init containers do not consume resources after pod start completion. The report now surfaces only runtime (steady‑state) container resources:
-
-* Removed aggregate keys: `all_cpu_raw`, `all_cpu_total`, `all_mem_raw`, `all_mem_total`, `all_cpu_lim_raw`, `all_cpu_lim_total`, `all_mem_lim_raw`, `all_mem_lim_total`.
-* Removed HTML / Excel rows: "Totals (all containers incl. init)" and "Overhead (init containers)".
-* Namespace totals tooltips and Excel comments explicitly state that init containers are discarded.
-
-If you previously parsed these `all_*` fields, update your automation to rely on the `main_*` counterparts which now represent the sole authoritative values. This change is non‑configurable and uniformly applied to keep the model simple and aligned with real, sustained cluster pressure.
-
-| cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Namespace/cluster-level resource demand, allocatable vs requested, hotspots    |
+| cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Unified cluster capacity: per-container details, namespace aggregation, allocatable vs requested, configuration analysis |
 | containers-config      | containers_config_report.py   | HTML         | Detailed container configuration, compliance, optimization recommendations    |
 | nodes                  | nodes_report.py               | HTML         | Node details, infrastructure capacity overview                                |
 
 ---
 
+## Cluster Capacity Report (Unified)
+
+The `cluster-capacity` report provides comprehensive resource analysis across three sections:
+
+### Section 1: Container Capacity per Namespace
+- Per-container resource requests/limits with replica counts
+- Grouped by namespace with namespace-level subtotals
+- Configuration quality rules highlighting risks
+- Detailed formulas in tooltips/comments
+
+### Section 2: Namespace Capacity vs Cluster Capacity
+- Aggregated resource totals per namespace
+- Percentage of cluster allocatable resources consumed
+- Sorted by utilization (highest first)
+- Cluster-wide totals row
+
+### Section 3: Container Requests vs Allocatable Resources on Worker Nodes
+- Total allocatable resources on worker nodes (baseline)
+- Main container requests and utilization percentage
+- Free resources remaining after requests
+- Limits comparison showing potential overcommit
+
+### Init Containers Exclusion
+The report intentionally ignores init containers for all sizing and aggregation metrics. Init containers do not consume resources after pod start completion, so only runtime (steady-state) container resources are shown for accurate capacity planning.
+
+---
+
 ## Enhanced Worker Node Capacity Evaluation
 
-All capacity reports (cluster-capacity, container-capacity, and containers-config) have been enhanced to provide accurate evaluation of resources available on worker nodes and consumed by workloads:
+All capacity reports have been enhanced to provide accurate evaluation of resources available on worker nodes and consumed by workloads:
 
 ### Worker Node Identification
 - **Enhanced Logic**: Worker nodes are identified using multiple methods:
@@ -40,7 +56,6 @@ All capacity reports (cluster-capacity, container-capacity, and containers-confi
 - **DaemonSet Handling**: 
   - DaemonSets are correctly counted as running one pod per eligible worker node
   - DaemonSets targeting infra or master nodes (via nodeSelector) show 0 replicas for worker capacity
-  - This applies to all three reports: cluster-capacity, container-capacity, and containers-config
 - **Node Placement**: Workloads targeting master or infra nodes via nodeSelector are excluded from worker node calculations
 
 ### Resource Calculations
@@ -50,17 +65,6 @@ All capacity reports (cluster-capacity, container-capacity, and containers-confi
   - Properly handles zero-replica deployments
   - Scales DaemonSets per worker node count
   - Shows correct total resource consumption (per-pod × replicas)
-
-### Report-Specific DaemonSet Display
-- **cluster-capacity**: Shows aggregated totals per namespace including DaemonSet resources
-- **container-capacity**: Shows per-container resources with replica count and total calculations
-- **containers-config**: Shows replica count for capacity planning and configuration review
-
-### Benefits
-- More accurate capacity utilization percentages
-- Better identification of worker node resource pressure
-- Correct accounting for system daemons and infrastructure workloads
-- Improved capacity planning insights across all reports
 
 ---
 
@@ -106,7 +110,7 @@ The `report` command now supports flexible combinations of `--all`, `--format`, 
 | Scenario | Example | Behavior |
 |----------|---------|----------|
 | Single cluster, single report, default format | `report --cluster prod --type summary` | Writes to `clusters/prod/reports/<prefix><timestamp>.html` |
-| Single cluster, single report, explicit file | `report --cluster prod --type container-capacity --format excel --out /tmp/cc.xlsx` | Writes exactly to `/tmp/cc.xlsx` |
+| Single cluster, single report, explicit file | `report --cluster prod --type cluster-capacity --format excel --out /tmp/cc.xlsx` | Writes exactly to `/tmp/cc.xlsx` |
 | Single cluster, all reports (HTML default) | `report --cluster prod --all` | Generates every registered type (one file per type) into `clusters/prod/reports/` |
 | Single cluster, all reports, override format & custom dir | `report --cluster prod --all --format excel --out /tmp/prod-reports` | Creates directory if missing; one Excel per report type |
 | Multi-cluster, single report | `report --cluster prod --cluster staging --type summary` | One file per cluster under each cluster's `reports/` dir |
