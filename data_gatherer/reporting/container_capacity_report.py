@@ -379,7 +379,7 @@ class CapacityReport(ReportGenerator):
             }
         ]
         parts.append(build_legend_html(capacity_legend_sections))
-        parts.append('<h2>Resource Summary by Namespace</h2>')
+        parts.append('<h2>Container Capacity per Namespace</h2>')
         parts.append('<table border=1 cellpadding=4 cellspacing=0>')
         parts.append('<tr>' + ''.join(f'<th>{h}</th>' for h in headers) + '</tr>')
 
@@ -441,7 +441,7 @@ class CapacityReport(ReportGenerator):
                 format_cell_with_condition(str(main_cpu_total), 'CPU_req_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
                 format_cell_with_condition(str(main_cpu_lim_total), 'CPU_lim_m_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
                 format_cell_with_condition(str(main_mem_total), 'Mem_req_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>'),
-                format_cell_with_condition(f'{main_mem_lim_total} ({main_mem_lim_total/1024:.2f} GiB)', 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
+                format_cell_with_condition(str(main_mem_lim_total), 'Mem_lim_Mi_total', None, 'container-capacity').replace('<td', '<th').replace('</td>', '</th>')
             ]
             parts.append('<tr>' + ''.join(totals_cells) + '</tr>')
         parts.append('</table>')
@@ -453,28 +453,110 @@ class CapacityReport(ReportGenerator):
         worker_mem_cap = node_capacity['worker_mem_cap']
         worker_mem_alloc = node_capacity['worker_mem_alloc']
 
-        parts.append('<h2>Resource Summary (Cluster-wide)</h2>')
-        parts.append('<h3>Containers</h3>')
+        # Section 2: Namespace aggregated requests/limits with cluster percentages
+        parts.append('<h2>Namespace Capacity vs Cluster Capacity</h2>')
+        # Build namespace aggregates from per-container rows (main containers only)
+        ns_agg: Dict[str, Dict[str, int]] = {}
+        for row in table_rows:
+            if row[4] != 'main':
+                continue
+            ns = row[1] or ''
+            ns_entry = ns_agg.setdefault(ns, {
+                'cpu_req_total': 0,
+                'cpu_lim_total': 0,
+                'mem_req_total': 0,
+                'mem_lim_total': 0,
+            })
+            # totals already multiplied by replicas live at indices 10-13
+            if isinstance(row[10], int):
+                ns_entry['cpu_req_total'] += row[10]
+            if isinstance(row[11], int):
+                ns_entry['cpu_lim_total'] += row[11]
+            if isinstance(row[12], int):
+                ns_entry['mem_req_total'] += row[12]
+            if isinstance(row[13], int):
+                ns_entry['mem_lim_total'] += row[13]
+
+        # Namespace table
         parts.append('<table border=1 cellpadding=4 cellspacing=0>')
-        parts.append('<tr><th>Scope</th><th>CPU Requests (m)</th><th>CPU Limits (m)</th><th>Memory Requests (Mi)</th><th>Memory Limits (Mi)</th></tr>')
         parts.append('<tr>'
-                     f'<td>Containers</td>'
-                     f'<td>{main_cpu_total}</td>'
-                     f'<td>{main_cpu_lim_total}</td>'
-                     f'<td>{main_mem_total}</td>'
-                     f'<td>{main_mem_lim_total}</td>'
+                     '<th>Namespace</th>'
+                     '<th>CPU Requests (m)</th>'
+                     '<th>Memory Requests (Mi)</th>'
+                     '<th>CPU Limits (m)</th>'
+                     '<th>Memory Limits (Mi)</th>'
+                     '<th>% CPU allocated on Cluster</th>'
+                     '<th>% Memory allocated on Cluster</th>'
                      '</tr>')
+        if ns_agg and (worker_cpu_alloc > 0 or worker_mem_alloc > 0):
+            # Order by combined percentage descending like cluster capacity report
+            def ns_sort_key(item: Tuple[str, Dict[str, int]]):
+                data = item[1]
+                cpu_pct = (data['cpu_req_total'] / worker_cpu_alloc * 100) if worker_cpu_alloc else 0
+                mem_pct = (data['mem_req_total'] / worker_mem_alloc * 100) if worker_mem_alloc else 0
+                return cpu_pct + mem_pct
+            for ns, data in sorted(ns_agg.items(), key=ns_sort_key, reverse=True):
+                cpu_pct_str = (f"{data['cpu_req_total'] / worker_cpu_alloc * 100:.1f}%" if worker_cpu_alloc else 'N/A')
+                mem_pct_str = (f"{data['mem_req_total'] / worker_mem_alloc * 100:.1f}%" if worker_mem_alloc else 'N/A')
+                parts.append(
+                    '<tr>'
+                    f'<td>{html.escape(ns)}</td>'
+                    f'<td>{data['cpu_req_total']}</td>'
+                    f'<td>{data['mem_req_total']}</td>'
+                    f'<td>{data['cpu_lim_total']}</td>'
+                    f'<td>{data['mem_lim_total']}</td>'
+                    f'<td>{cpu_pct_str}</td>'
+                    f'<td>{mem_pct_str}</td>'
+                    '</tr>'
+                )
+            # Totals row
+            total_ns_cpu_req = sum(v['cpu_req_total'] for v in ns_agg.values())
+            total_ns_mem_req = sum(v['mem_req_total'] for v in ns_agg.values())
+            total_ns_cpu_lim = sum(v['cpu_lim_total'] for v in ns_agg.values())
+            total_ns_mem_lim = sum(v['mem_lim_total'] for v in ns_agg.values())
+            cpu_pct_total = (f"{total_ns_cpu_req / worker_cpu_alloc * 100:.1f}%" if worker_cpu_alloc else 'N/A')
+            mem_pct_total = (f"{total_ns_mem_req / worker_mem_alloc * 100:.1f}%" if worker_mem_alloc else 'N/A')
+            parts.append(
+                '<tr class="totals-row-all">'
+                '<td><strong>Totals</strong></td>'
+                f'<td><strong>{total_ns_cpu_req}</strong></td>'
+                f'<td><strong>{total_ns_mem_req}</strong></td>'
+                f'<td><strong>{total_ns_cpu_lim}</strong></td>'
+                f'<td><strong>{total_ns_mem_lim}</strong></td>'
+                f'<td><strong>{cpu_pct_total}</strong></td>'
+                f'<td><strong>{mem_pct_total}</strong></td>'
+                '</tr>'
+            )
+        else:
+            msg = 'No workloads found' if not ns_agg else 'No worker node capacity data'
+            parts.append(f'<tr><td colspan="7" style="text-align:center; font-style:italic;">{msg}</td></tr>')
         parts.append('</table>')
 
-        parts.append('<h3>Worker Nodes</h3>')
+
+        # Section 3: Detailed container requests vs allocatable (mirrors cluster capacity style)
+        parts.append('<h2>Container Requests vs Allocatable Resources on Worker Nodes</h2>')
         parts.append('<table border=1 cellpadding=4 cellspacing=0>')
-        parts.append('<tr><th>CPU Capacity (m)</th><th>CPU Allocatable (m)</th><th>Memory Capacity (Mi)</th><th>Memory Allocatable (Mi)</th></tr>')
-        parts.append('<tr>'
-                     f'<td>{worker_cpu_cap}</td>'
-                     f'<td>{worker_cpu_alloc}</td>'
-                     f'<td>{worker_mem_cap}</td>'
-                     f'<td>{worker_mem_alloc}</td>'
-                     '</tr>')
+        parts.append('<tr><th>Scope</th><th>CPU (m)</th><th>CPU % Allocatable</th><th>Memory (Mi)</th><th>Memory % Allocatable</th></tr>')
+        def pct(v: int, d: int) -> str:
+            return 'N/A' if d <= 0 else f"{(v / d) * 100:.1f}%"
+        alloc_cpu_pct = '100.0%' if worker_cpu_alloc > 0 else 'N/A'
+        alloc_mem_pct = '100.0%' if worker_mem_alloc > 0 else 'N/A'
+        free_cpu = max(0, worker_cpu_alloc - main_cpu_total)
+        free_mem = max(0, worker_mem_alloc - main_mem_total)
+        rows_cmp = [
+            ('Total resources allocatable on Worker nodes', worker_cpu_alloc, alloc_cpu_pct, worker_mem_alloc, alloc_mem_pct),
+            ('Main Containers Requests', main_cpu_total, pct(main_cpu_total, worker_cpu_alloc), main_mem_total, pct(main_mem_total, worker_mem_alloc)),
+            ('Free resources (Allocatable - Requests)', free_cpu, pct(free_cpu, worker_cpu_alloc), free_mem, pct(free_mem, worker_mem_alloc)),
+            ('Main Containers Limits', main_cpu_lim_total, pct(main_cpu_lim_total, worker_cpu_alloc), main_mem_lim_total, pct(main_mem_lim_total, worker_mem_alloc)),
+        ]
+        for scope, cpu_v, cpu_pct, mem_v, mem_pct in rows_cmp:
+            parts.append('<tr>'
+                         f'<td>{scope}</td>'
+                         f'<td>{cpu_v}</td>'
+                         f'<td>{cpu_pct}</td>'
+                         f'<td>{mem_v}</td>'
+                         f'<td>{mem_pct}</td>'
+                         '</tr>')
         parts.append('</table>')
 
         additional_css = (

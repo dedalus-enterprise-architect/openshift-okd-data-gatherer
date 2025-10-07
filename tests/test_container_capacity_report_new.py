@@ -239,22 +239,22 @@ class TestContainerCapacityReportDataGeneration:
 
 class TestContainerCapacityReportHTMLGeneration:
     """Test HTML report generation."""
-    
     def test_generate_html_report_with_data(self, sample_db_with_data, tmp_path):
         """Test HTML generation with sample data."""
         db, _ = sample_db_with_data
         report = CapacityReport()
-        
+
         # Generate data and HTML
         table_data = report._generate_capacity_data(db, 'test-cluster')
         html_content = report._generate_html_report('Test Report', table_data, 'test-cluster', db)
-        
+
         # Basic structure checks
         assert '<html>' in html_content
         assert '<h1>Test Report</h1>' in html_content
-        assert 'Resource Summary by Namespace' in html_content
-        assert 'Resource Summary (Cluster-wide)' in html_content
-        
+        assert 'Container Capacity per Namespace' in html_content
+        assert 'Namespace Capacity vs Cluster Capacity' in html_content
+        assert 'Container Requests vs Allocatable Resources on Worker Nodes' in html_content
+
         # Check for table headers
         expected_headers = ["Kind", "Namespace", "Name", "Container", "Type", "Replicas"]
         for header in expected_headers:
