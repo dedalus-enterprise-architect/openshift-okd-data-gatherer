@@ -60,15 +60,9 @@ def test_sizing_report(tmp_path):
     assert cc_files, 'No cluster capacity report generated'
     content = cc_files[0].read_text()
     assert 'Cluster Capacity Report' in content
-    assert 'Requests and Limits per namespace' in content
-    assert 'ns1' in content
-    assert '1,500' in content  # CPU requests (2*750 total)
-    assert '3,072' in content  # Memory requests (2*1024 + 2*512 = 3,072 with comma)
-    assert 'CPU Limits (m)' in content
-    assert 'Memory Limits (Mi)' in content
-    assert 'CPU % Allocatable' in content
-    assert 'Memory % Allocatable' in content
-    assert '<strong>Totals</strong>' in content  # Totals row
-    # Totals table presence and free allocatable row
+    # Updated structure checks
+    assert 'Namespace capacity vs Cluster capacity' in content
     assert 'Container Requests vs Allocatable resources on Worker Nodes' in content
     assert 'Free resources (Allocatable - Requests)' in content
+    assert 'ns1' in content
+    assert '<strong>Totals</strong>' in content

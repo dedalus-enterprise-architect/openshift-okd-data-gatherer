@@ -1,10 +1,10 @@
 from __future__ import annotations
-from .base import ReportGenerator, register
-from ..persistence.db import WorkloadDB
-from ..persistence.workload_queries import WorkloadQueries
-from .common import (
+from data_gatherer.reporting.base import ReportGenerator, register
+from data_gatherer.persistence.db import WorkloadDB
+from data_gatherer.persistence.workload_queries import WorkloadQueries
+from data_gatherer.reporting.common import (
     CONTAINER_WORKLOAD_KINDS, cpu_to_milli, mem_to_mi,
-    extract_pod_spec, get_replicas_for_workload,
+    extract_pod_spec, calculate_effective_replicas,
     build_legend_html, get_common_legend_sections, wrap_html_document,
     format_cell_with_condition
 )
@@ -36,6 +36,10 @@ class ContainerConfigurationReport(ReportGenerator):
         """Generate the core data structure used by both HTML and Excel formats."""
         wq = WorkloadQueries(db)
         rows = wq.list_for_kinds(cluster, list(CONTAINER_WORKLOAD_KINDS))
+        
+        # Get worker node count for DaemonSet calculations
+        worker_node_count = self._get_worker_node_count(db, cluster)
+        
         table_rows = []
         for rec in rows:
             kind = rec['kind']
@@ -45,7 +49,10 @@ class ContainerConfigurationReport(ReportGenerator):
             pod_spec = extract_pod_spec(kind, manifest)
             if not pod_spec:
                 continue
-            replicas = get_replicas_for_workload(kind, manifest)
+            
+            # Use shared calculation logic for consistency across all reports
+            replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
+            
             pod_labels = self._format_labels(
                 (manifest.get('spec', {}).get('template', {}).get('metadata', {}).get('labels', {}))
             )
@@ -191,6 +198,31 @@ class ContainerConfigurationReport(ReportGenerator):
         
         # Save the workbook
         wb.save(out_path)
+
+    def _get_worker_node_count(self, db: WorkloadDB, cluster: str) -> int:
+        """
+        Get the count of worker nodes in the cluster.
+        
+        Args:
+            db: Database connection
+            cluster: Cluster name
+            
+        Returns:
+            Number of worker nodes
+        """
+        try:
+            cur = db._conn.cursor()
+            # Enhanced query: Include nodes marked as worker OR nodes that are not master/infra
+            node_rows = cur.execute(
+                """SELECT COUNT(*) as count
+                   FROM node_capacity
+                   WHERE cluster=? AND deleted=0 
+                   AND (node_role='worker' OR (node_role NOT IN ('master', 'infra')))""",
+                (cluster,)
+            ).fetchone()
+            return node_rows[0] if node_rows else 0
+        except Exception:
+            return 0
 
     def _extract_readiness_probe_timeout(self, container_def):
         readiness_probe = container_def.get('readinessProbe', {})

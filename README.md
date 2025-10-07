@@ -17,8 +17,8 @@ The database always reflects the latest sync; removed objects disappear automati
 | Goal | How |
 |------|-----|
 | Get an inventory of controllers & specs | Run `sync`, then `report --type summary` |
-| See requested vs limited CPU/RAM (per container) | `report --type container-capacity` |
-| See namespace/cluster-level resource demand | `report --type cluster-capacity` |
+| See per-container CPU/RAM requests/limits + namespace aggregation | `report --type cluster-capacity` |
+| See namespace/cluster-level resource demand vs allocatable | `report --type cluster-capacity` |
 | Audit container configuration & missing requests/limits | `report --type containers-config` |
 | Inspect node sizing and available capacity | `nodes` command or `report --type nodes` |
 | Onboard multiple clusters | Add entries to `config/config.yaml`, run `init` + `sync` per cluster |
@@ -53,7 +53,7 @@ python -m data_gatherer.run report --cluster my-cluster --all
 ```
 Generate a specific report in Excel format:
 ```bash
-python -m data_gatherer.run report --cluster my-cluster --type container-capacity --format excel --out /tmp/container_report.xlsx
+python -m data_gatherer.run report --cluster my-cluster --type cluster-capacity --format excel --out /tmp/capacity_report.xlsx
 ```
 List node capacity:
 ```bash

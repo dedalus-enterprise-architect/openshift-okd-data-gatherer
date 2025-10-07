@@ -6,7 +6,7 @@ including resource parsing, pod spec extraction, and HTML generation utilities.
 from __future__ import annotations
 import html
 from typing import Optional, Dict, Any, List
-from .rules import RulesEngine, RuleRegistry, register_official_rules
+from data_gatherer.reporting.rules import RulesEngine, RuleRegistry, register_official_rules
 
 
 # Common workload kinds for container-based reports
@@ -88,6 +88,61 @@ def get_replicas_for_workload(kind: str, manifest: dict) -> Optional[int]:
     if kind == 'DaemonSet':
         return None
     return None
+
+
+def will_run_on_worker(pod_spec: Dict[str, Any]) -> bool:
+    """
+    Determine if a pod will run on worker nodes based on node selectors.
+    
+    This is the canonical implementation used by all reports to ensure consistency.
+    
+    Args:
+        pod_spec: Pod specification from workload manifest
+        
+    Returns:
+        True if pod can run on worker nodes, False otherwise
+    """
+    node_selector = pod_spec.get('nodeSelector', {})
+    
+    # If specifically targeting master or infra nodes, it won't run on workers
+    if 'node-role.kubernetes.io/master' in node_selector:
+        return False
+    if 'node-role.kubernetes.io/control-plane' in node_selector:
+        return False
+    if 'node-role.kubernetes.io/infra' in node_selector:
+        return False
+    
+    # If no restricting node selector, or if explicitly targeting workers, it will run on workers
+    return True
+
+
+def calculate_effective_replicas(kind: str, manifest: dict, pod_spec: Dict[str, Any], worker_node_count: int) -> int:
+    """
+    Calculate the effective number of replicas for capacity planning.
+    
+    This is the canonical implementation used by all reports to ensure consistency.
+    For DaemonSets, returns the worker node count if the DaemonSet will run on workers,
+    otherwise returns 0. For other workload types, returns the standard replica count.
+    
+    Args:
+        kind: Workload kind (Deployment, StatefulSet, DaemonSet, etc.)
+        manifest: Complete workload manifest
+        pod_spec: Extracted pod specification
+        worker_node_count: Number of worker nodes in the cluster
+        
+    Returns:
+        Effective replica count for capacity calculations
+    """
+    if kind == 'DaemonSet':
+        # DaemonSets run one pod per eligible node
+        if will_run_on_worker(pod_spec):
+            return worker_node_count
+        else:
+            return 0  # Doesn't run on worker nodes
+    else:
+        # For other workload types, use standard replica calculation
+        replicas = get_replicas_for_workload(kind, manifest)
+        return replicas if replicas is not None else 1
 
 
 def build_legend_html(sections: List[Dict[str, Any]]) -> str:
