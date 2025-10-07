@@ -8,33 +8,33 @@ This directory contains report generators for analyzing OpenShift cluster data s
 | Report Type            | File                          | Output Format | Purpose/Focus                                                                 |
 |------------------------|-------------------------------|--------------|------------------------------------------------------------------------------|
 | summary                | summary_report.py             | HTML         | High-level cluster overview, workload counts, node info                       |
-| cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Unified cluster capacity: per-container details, namespace aggregation, allocatable vs requested, configuration analysis |
+| cluster-capacity       | cluster_capacity_report.py    | HTML, Excel  | Per-container details, namespace aggregation, allocatable vs requested |
 | containers-config      | containers_config_report.py   | HTML         | Detailed container configuration, compliance, optimization recommendations    |
 | nodes                  | nodes_report.py               | HTML         | Node details, infrastructure capacity overview                                |
 
 ---
 
-## Cluster Capacity Report (Unified)
+## Cluster Capacity Report
 
 The `cluster-capacity` report provides comprehensive resource analysis across three sections:
 
-### Section 1: Container Capacity per Namespace
-- Per-container resource requests/limits with replica counts
-- Grouped by namespace with namespace-level subtotals
-- Configuration quality rules highlighting risks
-- Detailed formulas in tooltips/comments
-
-### Section 2: Namespace Capacity vs Cluster Capacity
+### Section 1: Namespace Capacity vs Cluster Capacity
 - Aggregated resource totals per namespace
 - Percentage of cluster allocatable resources consumed
 - Sorted by utilization (highest first)
 - Cluster-wide totals row
 
-### Section 3: Container Requests vs Allocatable Resources on Worker Nodes
+### Section 2: Container Requests vs Allocatable Resources on Worker Nodes
 - Total allocatable resources on worker nodes (baseline)
 - Main container requests and utilization percentage
 - Free resources remaining after requests
 - Limits comparison showing potential overcommit
+
+### Section 3: Container Capacity per Namespace
+- Per-container resource requests/limits with replica counts
+- Grouped by namespace with namespace-level subtotals
+- Configuration quality rules highlighting risks
+- Detailed formulas in tooltips/comments
 
 ### Init Containers Exclusion
 The report intentionally ignores init containers for all sizing and aggregation metrics. Init containers do not consume resources after pod start completion, so only runtime (steady-state) container resources are shown for accurate capacity planning.
@@ -79,6 +79,8 @@ Reports apply a unified rules engine to highlight configuration quality issues. 
 | WARNING_MISS | Yellow background | Recommended value or parameter is missing |
 | ERROR_MISCONF | Red text | Wrong value or parameter set |
 | WARNING_MISCONF | Orange text | Value or parameter set should be re-evaluated |
+
+**Totals Row Color:** All totals rows (namespace, cluster, summary) use a light grey background for visual consistency. This color is distinct from warning/error backgrounds.
 
 ### Implemented Rules
 
@@ -126,7 +128,7 @@ The `report` command now supports flexible combinations of `--all`, `--format`, 
 
 #### `--format` Override
 * Applies globally to all targeted report types for the invocation.
-* If a report does not support the requested format, it falls back to its first supported format and logs a notice (the run continues).
+* If a report does not support the requested format, it is skipped and a notice is logged (the run continues). No fallback format is generated.
 
 #### Examples
 Generate all reports for a single cluster into a custom directory in Excel:
@@ -143,6 +145,8 @@ python -m data_gatherer.run report --cluster prod --cluster staging --type summa
 ```
 Explicit single output file path:
 ```bash
+# Example: Generate a single cluster-capacity Excel file for one cluster
+python -m data_gatherer.run report --cluster prod --type cluster-capacity --format excel --out /tmp/cc.xlsx
 ```
 
 ### Getting Help
