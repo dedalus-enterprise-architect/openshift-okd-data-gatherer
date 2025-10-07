@@ -240,7 +240,11 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
             raise click.ClickException('Cluster not initialized. Run init first.')
         db = WorkloadDB(paths.db_path)
         if all:
-            reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
+            # Use --out as reports_dir if provided and is a directory
+            if out and os.path.isdir(out):
+                reports_dir = out
+            else:
+                reports_dir = os.path.join(cfg.storage.base_dir, cluster, 'reports')
             os.makedirs(reports_dir, exist_ok=True)
             ts = datetime.now().strftime('%Y%m%dT%H%M%S')
             generated_reports = []
