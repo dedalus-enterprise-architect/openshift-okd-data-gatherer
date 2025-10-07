@@ -217,7 +217,9 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
             click.echo(f'  {t}')
         return
     if all and out:
-        raise click.ClickException('Cannot specify --out with --all flag.')
+        # Only raise error if --out is a file path, not a directory
+        if not os.path.isdir(out):
+            raise click.ClickException('--out must be a directory when used with --all flag.')
     if all and report_type != 'summary':
         raise click.ClickException('Cannot specify --type with --all flag.')
     config = ctx.obj['config']
