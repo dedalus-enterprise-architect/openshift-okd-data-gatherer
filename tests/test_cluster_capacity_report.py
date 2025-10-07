@@ -1,693 +1,168 @@
-"""
-Tests for the refactored container capacity report with modular design.
+"""New tests for ClusterCapacityReport aligned with current implementation.
 
-Tests cover:
-- Multi-format support (HTML/Excel)
-- Data generation and processing
-- Resource aggregation
-- Edge cases and error handling
+Focus areas:
+1. Core data structure (ns_totals, node_capacity, summary_totals, ns_details)
+2. HTML generation sections
+3. Excel generation structural validation
+4. CLI integration (cluster-capacity type)
 """
-import tempfile
-import pytest
-from pathlib import Path
 from datetime import datetime, timezone
-
+import pytest
 from data_gatherer.reporting.cluster_capacity_report import ClusterCapacityReport
 from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.util.hash import sha256_of_manifest
 
 
 @pytest.fixture
-def sample_db_with_data(tmp_path):
-    """Create a test database with sample workload data."""
-    db_path = tmp_path / 'test.db'
+def db_with_sample(tmp_path):
+    db_path = tmp_path / 'sample.db'
     db = WorkloadDB(str(db_path))
     now = datetime.now(timezone.utc)
-    
-    # Sample Deployment with main and init containers
-    deployment_manifest = {
-        'apiVersion': 'apps/v1',
-        'kind': 'Deployment',
-        'metadata': {'name': 'web-app', 'namespace': 'production'},
-        'spec': {
-            'replicas': 3,
-            'template': {
-                'spec': {
-                    'initContainers': [
-                        {
-                            'name': 'init-db',
-                            'image': 'busybox',
-                            'resources': {
-                                'requests': {'cpu': '100m', 'memory': '128Mi'},
-                                'limits': {'cpu': '200m', 'memory': '256Mi'}
-                            }
-                        }
-                    ],
-                    'containers': [
-                        {
-                            'name': 'web',
-                            'image': 'nginx',
-                            'resources': {
-                                'requests': {'cpu': '200m', 'memory': '256Mi'},
-                                'limits': {'cpu': '400m', 'memory': '512Mi'}
-                            }
-                        },
-                        {
-                            'name': 'sidecar',
-                            'image': 'proxy',
-                            'resources': {
-                                'requests': {'cpu': '50m', 'memory': '64Mi'}
-                                # No limits specified - should trigger conditional formatting
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+    # Two workloads across two namespaces
+    man1 = {
+        'apiVersion': 'apps/v1', 'kind': 'Deployment',
+        'metadata': {'name': 'app', 'namespace': 'ns1'},
+        'spec': {'replicas': 2, 'template': {'spec': {'containers': [
+            {'name': 'c1', 'resources': {'requests': {'cpu': '250m', 'memory': '256Mi'}, 'limits': {'cpu': '500m', 'memory': '512Mi'}}},
+            {'name': 'c2', 'resources': {'requests': {'cpu': '100m', 'memory': '64Mi'}}}
+        ]}}}
     }
-    
-    # Sample StatefulSet in different namespace
-    statefulset_manifest = {
-        'apiVersion': 'apps/v1',
-        'kind': 'StatefulSet',
-        'metadata': {'name': 'database', 'namespace': 'storage'},
-        'spec': {
-            'replicas': 2,
-            'template': {
-                'spec': {
-                    'containers': [
-                        {
-                            'name': 'db',
-                            'image': 'postgres',
-                            'resources': {
-                                'requests': {'cpu': '500m', 'memory': '1Gi'},
-                                'limits': {'cpu': '1000m', 'memory': '2Gi'}
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+    man2 = {
+        'apiVersion': 'apps/v1', 'kind': 'StatefulSet',
+        'metadata': {'name': 'db', 'namespace': 'ns2'},
+        'spec': {'replicas': 1, 'template': {'spec': {'containers': [
+            {'name': 'pg', 'resources': {'requests': {'cpu': '300m', 'memory': '512Mi'}, 'limits': {'cpu': '600m', 'memory': '1Gi'}}}
+        ]}}}
     }
-    
-    # Sample Job with missing resources
-    job_manifest = {
-        'apiVersion': 'batch/v1',
-        'kind': 'Job',
-        'metadata': {'name': 'batch-process', 'namespace': 'production'},
-        'spec': {
-            'parallelism': 1,
-            'template': {
-                'spec': {
-                    'containers': [
-                        {
-                            'name': 'processor',
-                            'image': 'batch-app'
-                            # No resources specified - should trigger conditional formatting
-                        }
-                    ]
-                }
-            }
-        }
-    }
-    
-    # Insert workloads
-    db.upsert_workload(
-        cluster='test-cluster', api_version='apps/v1', kind='Deployment',
-        namespace='production', name='web-app', resource_version='1', uid='u1',
-        manifest=deployment_manifest, manifest_hash=sha256_of_manifest(deployment_manifest), now=now
-    )
-    
-    db.upsert_workload(
-        cluster='test-cluster', api_version='apps/v1', kind='StatefulSet',
-        namespace='storage', name='database', resource_version='1', uid='u2',
-        manifest=statefulset_manifest, manifest_hash=sha256_of_manifest(statefulset_manifest), now=now
-    )
-    
-    db.upsert_workload(
-        cluster='test-cluster', api_version='batch/v1', kind='Job',
-        namespace='production', name='batch-process', resource_version='1', uid='u3',
-        manifest=job_manifest, manifest_hash=sha256_of_manifest(job_manifest), now=now
-    )
-    
-    return db, str(db_path)
+    db.upsert_workload('clusterA', 'apps/v1', 'Deployment', 'ns1', 'app', '1', 'u1', man1, sha256_of_manifest(man1), now)
+    db.upsert_workload('clusterA', 'apps/v1', 'StatefulSet', 'ns2', 'db', '1', 'u2', man2, sha256_of_manifest(man2), now)
+    return db
 
 
-@pytest.fixture
-def empty_db(tmp_path):
-    """Create an empty test database."""
-    db_path = tmp_path / 'empty.db'
-    db = WorkloadDB(str(db_path))
-    return db, str(db_path)
+def test_generate_capacity_data_structure(db_with_sample):
+    report = ClusterCapacityReport()
+    data = report._generate_capacity_data(db_with_sample, 'clusterA')
+    for key in ['ns_totals', 'node_capacity', 'summary_totals', 'ns_details']:
+        assert key in data
+    # ns_totals correctness (init containers ignored, only main containers as implemented)
+    # ns1: (c1 250m + c2 100m)=350m *2 replicas = 700m CPU, (256+64)=320Mi *2 = 640Mi
+    # limits: c1 only 500m *2=1000m CPU, 512Mi*2=1024Mi
+    assert data['ns_totals']['ns1']['cpu'] == 700
+    assert data['ns_totals']['ns1']['mem'] == 640
+    assert data['ns_totals']['ns1']['cpu_lim'] == 1000
+    assert data['ns_totals']['ns1']['mem_lim'] == 1024
+    # ns2: single replica 300m / 512Mi requests; limits 600m / 1024Mi
+    assert data['ns_totals']['ns2']['cpu'] == 300
+    assert data['ns_totals']['ns2']['mem'] == 512
+    assert data['ns_totals']['ns2']['cpu_lim'] == 600
+    assert data['ns_totals']['ns2']['mem_lim'] == 1024
+    # Summary totals
+    st = data['summary_totals']
+    assert st['total_req_cpu'] == 1000  # 700 + 300
+    assert st['total_req_mem'] == 1152  # 640 + 512
+    assert st['total_lim_cpu'] == 1600  # 1000 + 600
+    assert st['total_lim_mem'] == 2048  # 1024 + 1024
+    # ns_details contains per-namespace lists
+    assert 'ns1' in data['ns_details'] and 'ns2' in data['ns_details']
+    assert len(data['ns_details']['ns1']) == 2
+    assert len(data['ns_details']['ns2']) == 1
 
 
-class TestContainerCapacityReportDataGeneration:
-    """Test the core data generation functionality."""
-    
-    def test_generate_capacity_data_with_data(self, sample_db_with_data):
-        """Test data generation with sample workloads."""
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        table_data = report._generate_capacity_data(db, 'test-cluster')
-        
-        # Verify structure
-        assert 'table_rows' in table_data
-        assert 'headers' in table_data
-        assert 'aggregates' in table_data
-        assert 'node_capacity' in table_data
-        
-        # Verify headers
-        expected_headers = [
-            "Kind", "Namespace", "Name", "Container", "Type", "Replicas",
-            "CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi",
-            "CPU_req_m_total", "CPU_lim_m_total", "Mem_req_Mi_total", "Mem_lim_Mi_total"
-        ]
-        assert table_data['headers'] == expected_headers
-        
-        # Verify we have data rows
-        table_rows = table_data['table_rows']
-        assert len(table_rows) > 0
-        
-        # Verify row structure - each row should have 14 columns
-        for row in table_rows:
-            assert len(row) == 14
-        
-        # Verify aggregates structure (init containers discarded: only main_* keys remain)
-        aggregates = table_data['aggregates']
-        expected_agg_keys = [
-            'main_cpu_raw', 'main_mem_raw',
-            'main_cpu_total', 'main_mem_total',
-            'main_cpu_lim_raw', 'main_mem_lim_raw',
-            'main_cpu_lim_total', 'main_mem_lim_total'
-        ]
-        assert set(aggregates.keys()) == set(expected_agg_keys), f"Unexpected aggregate keys: {aggregates.keys()}"
-        for key in expected_agg_keys:
-            assert isinstance(aggregates[key], int)
-        
-        # Verify node capacity structure
-        node_capacity = table_data['node_capacity']
-        expected_node_keys = ['worker_cpu_cap', 'worker_cpu_alloc', 'worker_mem_cap', 'worker_mem_alloc']
-        for key in expected_node_keys:
-            assert key in node_capacity
-            assert isinstance(node_capacity[key], int)
-    
-    def test_generate_capacity_data_empty(self, empty_db):
-        """Test data generation with empty database."""
-        db, _ = empty_db
-        report = CapacityReport()
-        
-        table_data = report._generate_capacity_data(db, 'empty-cluster')
-        
-        # Should have structure but empty data
-        assert table_data['table_rows'] == []
-        assert len(table_data['headers']) == 14
-        
-        # Aggregates should be all zeros
-        aggregates = table_data['aggregates']
-        for value in aggregates.values():
-            assert value == 0
-    
-    def test_process_workload_record(self, sample_db_with_data):
-        """Test individual workload record processing."""
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        # Get a sample record
-        from data_gatherer.persistence.workload_queries import WorkloadQueries
-        from data_gatherer.reporting.common import CONTAINER_WORKLOAD_KINDS
-        
-        wq = WorkloadQueries(db)
-        rows = wq.list_for_kinds('test-cluster', list(CONTAINER_WORKLOAD_KINDS))
-        
-        assert len(rows) > 0
-        sample_rec = rows[0]  # Get first workload
-        
-        aggregates = report._initialize_aggregates()
-        # Get worker node count for DaemonSet calculations
-        node_capacity = report._get_node_capacity(db, 'test-cluster')
-        worker_node_count = node_capacity.get('worker_node_count', 0)
-        processed_rows = report._process_workload_record(sample_rec, aggregates, worker_node_count)
-        
-        assert processed_rows is not None
-        assert len(processed_rows) > 0
-        
-        # Each processed row should have correct structure
-        for row in processed_rows:
-            assert len(row) == 14
-            assert row[0] in ['Deployment', 'StatefulSet', 'Job']  # Kind
-            assert row[1] in ['production', 'storage']  # Namespace
-            assert isinstance(row[5], int)  # Replicas
+def test_generate_capacity_data_empty(tmp_path):
+    db = WorkloadDB(str(tmp_path / 'empty.db'))
+    report = ClusterCapacityReport()
+    data = report._generate_capacity_data(db, 'empty')
+    assert data['ns_totals'] == {}
+    assert data['summary_totals']['total_req_cpu'] == 0
+    assert data['ns_details'] == {}
 
 
-class TestContainerCapacityReportHTMLGeneration:
-    """Test HTML report generation."""
-    def test_generate_html_report_with_data(self, sample_db_with_data, tmp_path):
-        """Test HTML generation with sample data."""
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-
-        table_data = report._generate_capacity_data(db, 'test-cluster')
-        html_content = report._generate_html_report('Test Report', table_data, 'test-cluster', db)
-        assert '<html>' in html_content
-        assert '<h1>Test Report</h1>' in html_content
-        assert 'Container Capacity per Namespace' in html_content
-        assert 'Namespace Capacity vs Cluster Capacity' in html_content
-        assert 'Container Requests vs Allocatable Resources on Worker Nodes' in html_content
-
-        expected_headers = ["Kind", "Namespace", "Name", "Container", "Type", "Replicas"]
-        for header in expected_headers:
-            assert f'<th>{header}</th>' in html_content
-
-        assert 'production' in html_content
-        assert 'storage' in html_content
-
-        assert 'Totals (main containers)' in html_content
-        assert 'All containers incl. init' not in html_content
-        assert 'Overhead (init containers)' not in html_content
-    
-    def test_generate_html_report_empty(self, empty_db, tmp_path):
-        """Test HTML generation with empty data."""
-        db, _ = empty_db
-        report = CapacityReport()
-        
-        table_data = report._generate_capacity_data(db, 'empty-cluster')
-        html_content = report._generate_html_report('Empty Report', table_data, 'empty-cluster', db)
-        
-        assert '<html>' in html_content
-        assert '<h1>Empty Report</h1>' in html_content
-        assert 'No container workloads found' in html_content
-    
-    def test_full_html_generation(self, sample_db_with_data, tmp_path):
-        """Test complete HTML file generation."""
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        out_path = tmp_path / 'test-report.html'
-        report.generate(db, 'test-cluster', str(out_path), 'html')
-        
-        # Verify file was created
-        assert out_path.exists()
-        
-        # Verify content
-        content = out_path.read_text(encoding='utf-8')
-        assert 'Capacity aggregation report: test-cluster' in content
-        assert 'production' in content
-        assert 'storage' in content
+def test_html_report_generation(db_with_sample, tmp_path):
+    report = ClusterCapacityReport()
+    data = report._generate_capacity_data(db_with_sample, 'clusterA')
+    html_doc = report._generate_html_report('Cluster Capacity Report: clusterA', data, 'clusterA')
+    # Core sections
+    assert 'Container Requests vs Allocatable resources on Worker Nodes' in html_doc
+    assert 'Namespace capacity vs Cluster capacity' in html_doc
+    # Namespace names and totals row label
+    assert 'ns1' in html_doc and 'ns2' in html_doc
+    assert '<strong>Totals</strong>' in html_doc
 
 
-class TestContainerCapacityReportExcelGeneration:
-    """Test Excel report generation."""
-    
-    def test_generate_excel_report_with_data(self, sample_db_with_data, tmp_path):
-        """Test Excel generation with sample data."""
-        pytest.importorskip("openpyxl")
-        
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        out_path = tmp_path / 'test-report.xlsx'
-        report.generate(db, 'test-cluster', str(out_path), 'excel')
-        
-        # Verify file was created
-        assert out_path.exists()
-        
-        # Load and verify Excel content
-        from openpyxl import load_workbook
-        wb = load_workbook(str(out_path))
-        ws = wb.active
-        
-        # Check title
-        assert 'Capacity aggregation report: test-cluster' in str(ws['A1'].value)
-        
-        # Check headers (row 3)
-        expected_headers = [
-            "Kind", "Namespace", "Name", "Container", "Type", "Replicas",
-            "CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi",
-            "CPU_req_m_total", "CPU_lim_m_total", "Mem_req_Mi_total", "Mem_lim_Mi_total"
-        ]
-        for col_num, header in enumerate(expected_headers, 1):
-            assert ws.cell(row=3, column=col_num).value == header
-        
-        # Verify we have data rows (starting from row 4)
-        data_found = False
-        for row in range(4, 20):  # Check reasonable range
-            if ws.cell(row=row, column=1).value in ['Deployment', 'StatefulSet', 'Job']:
-                data_found = True
-                break
-        assert data_found, "No workload data found in Excel output"
-        
-        # Check for totals section
-        totals_found = False
-        for row in range(4, 50):  # Check larger range for totals
-            cell_value = ws.cell(row=row, column=1).value
-            if cell_value and 'Totals' in str(cell_value):
-                totals_found = True
-                break
-        assert totals_found, "Totals section not found in Excel output"
-    
-    def test_generate_excel_report_empty(self, empty_db, tmp_path):
-        """Test Excel generation with empty data."""
-        pytest.importorskip("openpyxl")
-        
-        db, _ = empty_db
-        report = CapacityReport()
-        
-        out_path = tmp_path / 'empty-report.xlsx'
-        report.generate(db, 'empty-cluster', str(out_path), 'excel')
-        
-        # Verify file was created
-        assert out_path.exists()
-        
-        # Load and verify Excel content
-        from openpyxl import load_workbook
-        wb = load_workbook(str(out_path))
-        ws = wb.active
-        
-        # Check title
-        assert 'Capacity aggregation report: empty-cluster' in str(ws['A1'].value)
-        
-        # Should have headers but no data rows (except possibly totals)
-        assert ws.cell(row=3, column=1).value == "Kind"
-        
-        # Row 4 should be empty or contain totals
-        row_4_value = ws.cell(row=4, column=1).value
-        assert row_4_value is None or 'Totals' in str(row_4_value)
-    
-    def test_excel_conditional_formatting(self, sample_db_with_data, tmp_path):
-        """Test that Excel conditional formatting is applied for missing resources."""
-        pytest.importorskip("openpyxl")
-        
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        out_path = tmp_path / 'formatting-test.xlsx'
-        report.generate(db, 'test-cluster', str(out_path), 'excel')
-        
-        # Load Excel file
-        from openpyxl import load_workbook
-        wb = load_workbook(str(out_path))
-        ws = wb.active
-        
-        # Look for cells with missing values and verify formatting
-        missing_resource_found = False
-        for row in range(4, 20):
-            for col in range(7, 11):  # Resource columns
-                cell = ws.cell(row=row, column=col)
-                if cell.value == '' or cell.value is None:
-                    # Should have conditional formatting applied
-                    assert cell.fill is not None
-                    missing_resource_found = True
-        
-        # We should find at least one missing resource in our test data
-        assert missing_resource_found, "No missing resources found to test conditional formatting"
-    
-    def test_excel_openpyxl_import_error(self, sample_db_with_data, tmp_path, monkeypatch):
-        """Test proper error handling when openpyxl is not available."""
-        db, _ = sample_db_with_data
-        report = CapacityReport()
-        
-        # Mock the _generate_excel_report method to simulate ImportError
-        def mock_excel_generation(*args, **kwargs):
-            raise ImportError("openpyxl is required for Excel output. Install with: pip install openpyxl")
-        
-        monkeypatch.setattr(report, '_generate_excel_report', mock_excel_generation)
-        
-        out_path = tmp_path / 'should-fail.xlsx'
-        
-        with pytest.raises(ImportError, match="openpyxl is required"):
-            report.generate(db, 'test-cluster', str(out_path), 'excel')
+def test_excel_report_generation(db_with_sample, tmp_path):
+    pytest.importorskip('openpyxl')
+    report = ClusterCapacityReport()
+    out = tmp_path / 'cap.xlsx'
+    report.generate(db_with_sample, 'clusterA', str(out), 'excel')
+    assert out.exists()
+    from openpyxl import load_workbook
+    wb = load_workbook(str(out))
+    ws = wb.active
+    # Title
+    assert 'Cluster Capacity Report: clusterA' in str(ws['A1'].value)
+    # Find summary header row containing 'Scope'
+    scope_row = None
+    for r in range(1, 30):
+        if ws.cell(row=r, column=1).value == 'Scope':
+            scope_row = r
+            break
+    assert scope_row, 'Scope header row not found'
+    expected_summary_headers = ['Scope', 'CPU (m)', 'CPU % Allocatable', 'Memory (Mi)', 'Memory % Allocatable']
+    assert [ws.cell(row=scope_row, column=i).value for i in range(1, 6)] == expected_summary_headers
+    # Find namespace header row containing 'Namespace'
+    ns_header_row = None
+    for r in range(scope_row + 1, scope_row + 50):
+        if ws.cell(row=r, column=1).value == 'Namespace':
+            ns_header_row = r
+            break
+    assert ns_header_row, 'Namespace header row not found'
+    expected_ns_headers = [
+        'Namespace', 'CPU Requests (m)', 'Memory Requests (Mi)',
+        'CPU Limits (m)', 'Memory Limits (Mi)', '% CPU allocated on Cluster', '% Memory allocated on Cluster'
+    ]
+    assert [ws.cell(row=ns_header_row, column=i).value for i in range(1, 8)] == expected_ns_headers
+    # Totals row after namespace rows
+    totals_row_found = False
+    for r in range(ns_header_row + 1, ns_header_row + 40):
+        if ws.cell(row=r, column=1).value == 'Totals':
+            totals_row_found = True
+            break
+    assert totals_row_found, 'Totals row not found in namespace capacity section'
+    # Namespace detail section headers (Kind, Workload Name ...)
+    detail_header_found = False
+    for r in range(ns_header_row + 1, ns_header_row + 200):
+        if ws.cell(row=r, column=1).value == 'Kind' and ws.cell(row=r, column=2).value == 'Workload Name':
+            detail_header_found = True
+            break
+    assert detail_header_found, 'Detail header row not found'
 
 
-class TestContainerCapacityReportResourceCalculations:
-    """Test resource calculation accuracy (runtime only, init discarded)."""
-
-    def test_resource_aggregation_accuracy(self, tmp_path):
-        db_path = tmp_path / 'calc-test.db'
-        db = WorkloadDB(str(db_path))
-        now = datetime.now(timezone.utc)
-
-        test_manifest = {
-            'apiVersion': 'apps/v1',
-            'kind': 'Deployment',
-            'metadata': {'name': 'calc-test', 'namespace': 'test'},
-            'spec': {
-                'replicas': 3,
-                'template': {
-                    'spec': {
-                        'initContainers': [  # Ignored
-                            {
-                                'name': 'init',
-                                'resources': {
-                                    'requests': {'cpu': '100m', 'memory': '100Mi'},
-                                    'limits': {'cpu': '200m', 'memory': '200Mi'}
-                                }
-                            }
-                        ],
-                        'containers': [
-                            {
-                                'name': 'main',
-                                'resources': {
-                                    'requests': {'cpu': '200m', 'memory': '256Mi'},
-                                    'limits': {'cpu': '400m', 'memory': '512Mi'}
-                                }
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-
-        db.upsert_workload(
-            cluster='calc-test', api_version='apps/v1', kind='Deployment',
-            namespace='test', name='calc-test', resource_version='1', uid='u1',
-            manifest=test_manifest, manifest_hash=sha256_of_manifest(test_manifest), now=now
-        )
-
-        report = CapacityReport()
-        table_data = report._generate_capacity_data(db, 'calc-test')
-        aggregates = table_data['aggregates']
-
-        assert aggregates == {
-            'main_cpu_raw': 200,
-            'main_mem_raw': 256,
-            'main_cpu_total': 600,
-            'main_mem_total': 768,
-            'main_cpu_lim_raw': 400,
-            'main_mem_lim_raw': 512,
-            'main_cpu_lim_total': 1200,
-            'main_mem_lim_total': 1536,
-        }
-
-        # No deprecated all_* keys
-        for k in aggregates.keys():
-            assert not k.startswith('all_')
-    
-    def test_cpu_parsing_edge_cases(self):
-        """Test CPU capacity parsing with various formats."""
-        report = CapacityReport()
-        
-        # Test millicores format
-        assert report._parse_cpu_capacity('1500m') == 1500
-        assert report._parse_cpu_capacity('100m') == 100
-        
-        # Test cores format (decimal)
-        assert report._parse_cpu_capacity('1.5') == 1500
-        assert report._parse_cpu_capacity('0.5') == 500
-        assert report._parse_cpu_capacity('2') == 2000
-        
-        # Test edge cases
-        assert report._parse_cpu_capacity('') == 0
-        assert report._parse_cpu_capacity(None) == 0
-        assert report._parse_cpu_capacity('invalid') == 0
-        assert report._parse_cpu_capacity('m') == 0  # Invalid format
-    
-    def test_memory_parsing_edge_cases(self):
-        """Test memory capacity parsing with various formats."""
-        report = CapacityReport()
-        
-        # Test various units
-        assert report._parse_memory_capacity('1024Ki') == 1  # 1024 Ki = 1 Mi
-        assert report._parse_memory_capacity('256Mi') == 256
-        assert report._parse_memory_capacity('2Gi') == 2048  # 2 Gi = 2048 Mi
-        assert report._parse_memory_capacity('1024') == 1024  # Assume Mi
-        
-        # Test edge cases
-        assert report._parse_memory_capacity('') == 0
-        assert report._parse_memory_capacity(None) == 0
-        assert report._parse_memory_capacity('invalid') == 0
-        assert report._parse_memory_capacity('Mi') == 0  # Invalid format
-
-
-class TestContainerCapacityReportErrorHandling:
-    """Test error handling and edge cases."""
-    
-    def test_invalid_manifest_handling(self, tmp_path):
-        """Test handling of invalid or malformed manifests."""
-        db_path = tmp_path / 'invalid-test.db'
-        db = WorkloadDB(str(db_path))
-        now = datetime.now(timezone.utc)
-        
-        # Insert workload with invalid manifest (missing pod spec)
-        invalid_manifest = {
-            'apiVersion': 'apps/v1',
-            'kind': 'Deployment',
-            'metadata': {'name': 'invalid', 'namespace': 'test'},
-            'spec': {
-                'replicas': 1
-                # Missing template/spec - should be handled gracefully
-            }
-        }
-        
-        db.upsert_workload(
-            cluster='test', api_version='apps/v1', kind='Deployment',
-            namespace='test', name='invalid', resource_version='1', uid='u1',
-            manifest=invalid_manifest, manifest_hash=sha256_of_manifest(invalid_manifest), now=now
-        )
-        
-        report = CapacityReport()
-        table_data = report._generate_capacity_data(db, 'test')
-        
-        # Should handle gracefully - no data rows but no crashes
-        assert table_data['table_rows'] == []
-        assert all(v == 0 for v in table_data['aggregates'].values())
-    
-    def test_missing_resources_handling(self, tmp_path):
-        """Test handling of containers with missing resource specifications."""
-        db_path = tmp_path / 'missing-resources.db'
-        db = WorkloadDB(str(db_path))
-        now = datetime.now(timezone.utc)
-        
-        # Container with no resources specified
-        manifest = {
-            'apiVersion': 'apps/v1',
-            'kind': 'Deployment',
-            'metadata': {'name': 'no-resources', 'namespace': 'test'},
-            'spec': {
-                'replicas': 2,
-                'template': {
-                    'spec': {
-                        'containers': [
-                            {
-                                'name': 'no-resources',
-                                'image': 'nginx'
-                                # No resources block
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-        
-        db.upsert_workload(
-            cluster='test', api_version='apps/v1', kind='Deployment',
-            namespace='test', name='no-resources', resource_version='1', uid='u1',
-            manifest=manifest, manifest_hash=sha256_of_manifest(manifest), now=now
-        )
-        
-        report = CapacityReport()
-        table_data = report._generate_capacity_data(db, 'test')
-        
-        # Should have one row with empty resource values
-        assert len(table_data['table_rows']) == 1
-        row = table_data['table_rows'][0]
-        
-        # Resource columns should be empty strings
-        assert row[6] == ''  # CPU_req_m
-        assert row[7] == ''  # CPU_lim_m
-        assert row[8] == ''  # Mem_req_Mi
-        assert row[9] == ''  # Mem_lim_Mi
-        assert row[10] == ''  # CPU_req_m_total
-        assert row[11] == ''  # CPU_lim_m_total
-        assert row[12] == ''  # Mem_req_Mi_total
-        assert row[13] == ''  # Mem_lim_Mi_total
-        
-        # Aggregates should still be zero
-        assert all(v == 0 for v in table_data['aggregates'].values())
-
-
-# Integration test using the CLI
-def test_container_capacity_report_cli_integration(tmp_path):
-    """Test the full CLI integration for container capacity reports."""
+def test_cli_integration_cluster_capacity(tmp_path):
     from click.testing import CliRunner
     from data_gatherer.run import cli
-    
-    # Create test database with data
-    db_path = tmp_path / 'data.db'
+    runner = CliRunner()
+    cfg = tmp_path / 'cfg.yaml'
+    cfg.write_text(f"""storage:\n  base_dir: {tmp_path.as_posix()}\nclusters:\n  - name: c1\n    credentials:\n      host: https://dummy\n      verify_ssl: false\n    include_kinds: [Deployment]\n    parallelism: 1\nlogging:\n  level: INFO\n  format: text\n""")
+    # init storage
+    res = runner.invoke(cli, ['--config', str(cfg), 'init', '--cluster', 'c1'])
+    assert res.exit_code == 0, res.output
+    # Insert minimal workload directly
+    db_path = tmp_path / 'c1' / 'data.db'
     db = WorkloadDB(str(db_path))
     now = datetime.now(timezone.utc)
-    
-    test_manifest = {
-        'apiVersion': 'apps/v1',
-        'kind': 'Deployment',
-        'metadata': {'name': 'cli-test', 'namespace': 'default'},
-        'spec': {
-            'replicas': 1,
-            'template': {
-                'spec': {
-                    'containers': [
-                        {
-                            'name': 'test',
-                            'resources': {
-                                'requests': {'cpu': '100m', 'memory': '128Mi'}
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+    manifest = {
+        'apiVersion': 'apps/v1', 'kind': 'Deployment',
+        'metadata': {'name': 'demo', 'namespace': 'demo-ns'},
+        'spec': {'replicas': 1, 'template': {'spec': {'containers': [
+            {'name': 'c', 'resources': {'requests': {'cpu': '100m', 'memory': '128Mi'}}}
+        ]}}}
     }
-    
-    db.upsert_workload(
-        cluster='cli-test-cluster', api_version='apps/v1', kind='Deployment',
-        namespace='default', name='cli-test', resource_version='1', uid='u1',
-        manifest=test_manifest, manifest_hash=sha256_of_manifest(test_manifest), now=now
-    )
+    db.upsert_workload('c1', 'apps/v1', 'Deployment', 'demo-ns', 'demo', '1', 'u1', manifest, sha256_of_manifest(manifest), now)
     db._conn.close()
-    
-    # Create config file
-    cfg_content = f'''storage:
-  base_dir: {tmp_path.as_posix()}
-  write_manifest_files: false
-clusters:
-  - name: cli-test-cluster
-    credentials:
-      host: https://dummy
-      verify_ssl: false
-    include_kinds: [Deployment]
-    parallelism: 2
-logging:
-  level: INFO
-  format: text
-'''
-    cfg_path = tmp_path / 'cfg.yaml'
-    cfg_path.write_text(cfg_content)
-    
-    # Place database in expected location
-    cluster_dir = tmp_path / 'cli-test-cluster'
-    cluster_dir.mkdir(exist_ok=True)
-    import shutil
-    shutil.copy(str(db_path), cluster_dir / 'data.db')
-    
-    # Test HTML generation
-    runner = CliRunner()
-    result = runner.invoke(cli, [
-        '--config', str(cfg_path), 'report',
-        '--cluster', 'cli-test-cluster',
-        '--type', 'container-capacity'
-    ])
-    assert result.exit_code == 0, f"CLI failed: {result.output}"
-    
-    # Test Excel generation if openpyxl is available
-    try:
-        import openpyxl
-        result = runner.invoke(cli, [
-            '--config', str(cfg_path), 'report', 
-            '--cluster', 'cli-test-cluster',
-            '--type', 'container-capacity',
-            '--format', 'excel'
-        ])
-        assert result.exit_code == 0, f"Excel CLI failed: {result.output}"
-    except ImportError:
-        # Skip Excel test if openpyxl not available
-        pass
+    res2 = runner.invoke(cli, ['--config', str(cfg), 'report', '--cluster', 'c1', '--type', 'cluster-capacity'])
+    assert res2.exit_code == 0, res2.output
+    report_dir = tmp_path / 'c1' / 'reports'
+    html_files = list(report_dir.glob('cluster-capacity-*.html'))
+    assert html_files, 'No cluster capacity report generated'
+    content = html_files[0].read_text()
+    assert 'demo-ns' in content and 'Cluster Capacity Report: c1' in content

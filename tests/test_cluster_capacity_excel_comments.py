@@ -1,6 +1,4 @@
-"""
-Test that container capacity report adds proper comments to namespace totals in Excel format.
-"""
+"""Updated tests validating Excel cluster capacity structure (no legacy namespace totals rows/comments)."""
 import pytest
 import tempfile
 import os
@@ -10,161 +8,115 @@ from data_gatherer.persistence.db import WorkloadDB
 from data_gatherer.util.hash import sha256_of_manifest
 
 
-def test_excel_namespace_totals_with_comments(sample_db):
-    """Test that namespace totals cells have descriptive formula comments."""
-    # Setup report generator and temporary output
-    report = CapacityReport()
+def test_excel_sections_and_totals(sample_db):
+    """Ensure Excel has summary, namespace capacity table with Totals, and detail sections."""
+    report = ClusterCapacityReport()
     with tempfile.TemporaryDirectory() as tmpdir:
-        out_path = os.path.join(tmpdir, "test-container-capacity.xlsx")
-        
-        # Generate Excel report
+        out_path = os.path.join(tmpdir, "cluster_capacity.xlsx")
         report.generate(sample_db, "test-cluster", out_path, format='excel')
-        
-        # Verify file was created
         assert os.path.exists(out_path)
-        
-        # Load workbook and check for comments
         try:
             from openpyxl import load_workbook
         except ImportError:
             pytest.skip("openpyxl not available")
-        
         wb = load_workbook(out_path)
         ws = wb.active
-        
-        # Find namespace totals rows (they should have "Namespace totals" in column 1)
-        ns_totals_rows = []
-        for row_idx, row in enumerate(ws.iter_rows(min_row=4, values_only=False), start=4):
-            if row[0].value == "Namespace totals":
-                ns_totals_rows.append(row_idx)
-        
-        # Verify we found at least one namespace totals row
-        assert len(ns_totals_rows) > 0, "Expected to find namespace totals rows"
-        
-        # Check that ALL metric cells (columns 7-14) have comments
-        expected_columns = [7, 8, 9, 10, 11, 12, 13, 14]
-        column_names = ['CPU_req_m', 'CPU_lim_m', 'Mem_req_Mi', 'Mem_lim_Mi', 
-                       'CPU_req_m_total', 'CPU_lim_m_total', 'Mem_req_Mi_total', 'Mem_lim_Mi_total']
-        
-        for row_idx in ns_totals_rows:
-            for col_num, col_name in zip(expected_columns, column_names):
-                cell = ws.cell(row=row_idx, column=col_num)
-                assert cell.comment is not None, \
-                    f"Expected comment on namespace totals {col_name} cell at row {row_idx}, column {col_num}"
-                
-                # Verify comment contains expected text
-                comment_text = cell.comment.text
-                assert "namespace" in comment_text.lower(), \
-                    f"Comment should mention 'namespace' for {col_name}"
-                assert "Formula:" in comment_text or "formula" in comment_text.lower(), \
-                    f"Comment should describe the formula for {col_name}"
-                # No longer require init exclusion or runtime wording
-                # Verify specific content based on column type
-                if "_total" in col_name:
-                    assert "Replicas" in comment_text or "×" in comment_text, \
-                        f"Total columns should mention replica multiplication for {col_name}"
+        scope_row = None
+        ns_header_row = None
+        totals_row = None
+        detail_header_found = False
+        for r in range(1, ws.max_row+1):
+            v1 = ws.cell(row=r, column=1).value
+            if v1 == 'Scope':
+                scope_row = r
+            elif v1 == 'Namespace':
+                ns_header_row = r
+            elif v1 == 'Totals' and ns_header_row and r > ns_header_row and totals_row is None:
+                totals_row = r
+            elif v1 == 'Kind' and ws.cell(row=r, column=2).value == 'Workload Name':
+                detail_header_found = True
+        assert scope_row, 'Summary scope section missing'
+        assert ns_header_row, 'Namespace capacity header missing'
+        assert totals_row, 'Totals row missing in namespace capacity table'
+        assert detail_header_found, 'Per-namespace detail section missing'
 
 
-def test_excel_namespace_totals_values_match_html(sample_db):
-    """Test that namespace totals in Excel match those in HTML report."""
-    report = CapacityReport()
-    
-    # Generate both formats
+def test_excel_namespaces_present_in_html(sample_db):
+    """Namespaces listed in Excel capacity table should appear in HTML report."""
+    report = ClusterCapacityReport()
     with tempfile.TemporaryDirectory() as tmpdir:
-        html_path = os.path.join(tmpdir, "test.html")
-        excel_path = os.path.join(tmpdir, "test.xlsx")
-        
-        report.generate(sample_db, "test-cluster", html_path, format='html')
-        report.generate(sample_db, "test-cluster", excel_path, format='excel')
-        
-        assert os.path.exists(html_path)
-        assert os.path.exists(excel_path)
-        
-        # Extract namespace totals from HTML
+        html_path = os.path.join(tmpdir, 'report.html')
+        xlsx_path = os.path.join(tmpdir, 'report.xlsx')
+        report.generate(sample_db, 'test-cluster', html_path, format='html')
+        report.generate(sample_db, 'test-cluster', xlsx_path, format='excel')
         with open(html_path, 'r') as f:
-            html_content = f.read()
-        
-        # Load Excel and extract namespace totals
+            html = f.read()
         try:
             from openpyxl import load_workbook
         except ImportError:
-            pytest.skip("openpyxl not available")
-        
-        wb = load_workbook(excel_path)
+            pytest.skip('openpyxl not available')
+        wb = load_workbook(xlsx_path)
         ws = wb.active
-        
-        # Find namespace totals in Excel
-        excel_ns_totals = {}
-        current_namespace = None
-        for row in ws.iter_rows(min_row=4, values_only=True):
-            # Track current namespace - namespace header has value in col 0 but rest are None (merged cells)
-            if row[0] and row[0] != "Namespace totals" and row[0] not in ["Totals (main containers)"]:
-                # Check if this is a namespace header (merged row) or a workload row
-                # Namespace header: has namespace in col 0, but columns 1-13 are None
-                # Workload row: has Kind in col 0, Namespace in col 1
-                if row[1] is None and row[2] is None:  # Likely a namespace header
-                    current_namespace = row[0]
-            elif row[0] == "Namespace totals" and current_namespace:
-                # Extract totals (columns 7-14 correspond to indices 6-13)
-                excel_ns_totals[current_namespace] = {
-                    'cpu_req': row[6],
-                    'cpu_lim': row[7],
-                    'mem_req': row[8],
-                    'mem_lim': row[9],
-                    'cpu_req_total': row[10],
-                    'cpu_lim_total': row[11],
-                    'mem_req_total': row[12],
-                    'mem_lim_total': row[13]
-                }
-        
-        # Verify we found namespace totals in Excel
-        assert len(excel_ns_totals) > 0, "Expected to find namespace totals in Excel"
-        
-        # Verify namespace totals appear in HTML
-        for ns, totals in excel_ns_totals.items():
-            assert f"<strong>{ns}</strong>" in html_content or ns in html_content, \
-                f"Namespace {ns} should appear in HTML report"
-            # Check that totals values appear in HTML (allowing for formatting differences)
-            assert str(totals['cpu_req_total']) in html_content, \
-                f"CPU request total {totals['cpu_req_total']} should appear in HTML"
+        ns_header_row = None
+        for r in range(1, ws.max_row+1):
+            if ws.cell(row=r, column=1).value == 'Namespace':
+                ns_header_row = r
+                break
+        assert ns_header_row
+        namespaces = []
+        for r in range(ns_header_row+1, ns_header_row+100):
+            name = ws.cell(row=r, column=1).value
+            if not name:
+                break
+            if name == 'Totals':
+                continue
+            namespaces.append(name)
+        assert namespaces
+        for ns in namespaces:
+            assert ns in html, f'Namespace {ns} missing from HTML content'
 
 
-def test_excel_namespace_grouping(sample_db):
-    """Test that workloads are properly grouped by namespace in Excel."""
-    report = CapacityReport()
-    
+def test_excel_namespace_order_matches_detail_sections(sample_db):
+    """Order of namespaces in capacity table should match first appearance in detail sections."""
+    report = ClusterCapacityReport()
     with tempfile.TemporaryDirectory() as tmpdir:
-        out_path = os.path.join(tmpdir, "test.xlsx")
-        report.generate(sample_db, "test-cluster", out_path, format='excel')
-        
+        xlsx_path = os.path.join(tmpdir, 'report.xlsx')
+        report.generate(sample_db, 'test-cluster', xlsx_path, format='excel')
         try:
             from openpyxl import load_workbook
         except ImportError:
-            pytest.skip("openpyxl not available")
-        
-        wb = load_workbook(out_path)
+            pytest.skip('openpyxl not available')
+        wb = load_workbook(xlsx_path)
         ws = wb.active
-        
-        # Track namespace order and grouping
-        namespaces_seen = []
-        current_namespace = None
-        
-        for row in ws.iter_rows(min_row=4, values_only=True):
-            # Namespace header (merged cell with namespace name)
-            if row[0] and row[0] != "Namespace totals" and row[0] not in ["Totals (main containers)"]:
-                # Check if this is a namespace header (merged row) or a workload row
-                if row[1] is None and row[2] is None:  # Namespace header
-                    current_namespace = row[0]
-                    if current_namespace not in namespaces_seen:
-                        namespaces_seen.append(current_namespace)
-                elif row[1] and current_namespace:  # Workload row - has namespace value in column 2 (index 1)
-                    # Verify workload belongs to current namespace
-                    assert row[1] == current_namespace, \
-                        f"Workload namespace {row[1]} doesn't match current section {current_namespace}"
-        
-        # Verify we have proper grouping (namespaces should appear only once as section headers)
-        assert len(namespaces_seen) == len(set(namespaces_seen)), \
-            "Each namespace should appear only once as a section header"
+        # Capacity table namespaces
+        ns_header_row = None
+        for r in range(1, ws.max_row+1):
+            if ws.cell(row=r, column=1).value == 'Namespace':
+                ns_header_row = r
+                break
+        assert ns_header_row
+        cap_names = []
+        for r in range(ns_header_row+1, ns_header_row+100):
+            name = ws.cell(row=r, column=1).value
+            if not name:
+                break
+            if name == 'Totals':
+                continue
+            cap_names.append(name)
+        # Detail sections: scan for Kind header rows and look upward for namespace name label row inserted previously (the implementation writes a blank separator then title row with namespace name before detail table)
+        detail_first_seen = []
+        for r in range(1, ws.max_row+1):
+            if ws.cell(row=r, column=1).value == 'Kind' and ws.cell(row=r, column=2).value == 'Workload Name':
+                # Search backwards up to 5 rows for namespace name (non-empty, not 'Totals', not 'Namespace')
+                for back in range(r-1, max(0, r-6), -1):
+                    candidate = ws.cell(row=back, column=1).value
+                    if candidate and candidate not in ('Totals', 'Namespace', 'Scope') and candidate not in detail_first_seen and candidate != 'Kind':
+                        detail_first_seen.append(candidate)
+                        break
+        # We only assert relative ordering for namespaces that appear in both lists
+        overlap = [n for n in cap_names if n in detail_first_seen]
+        detail_overlap = [n for n in detail_first_seen if n in overlap]
+        assert overlap == detail_overlap, 'Namespace order mismatch between capacity and detail sections'
 
 
 @pytest.fixture

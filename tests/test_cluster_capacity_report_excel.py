@@ -43,24 +43,38 @@ def test_cluster_capacity_report_excel(tmp_path):
     ws = wb.active
     # Check title
     assert ws.title == "Cluster Capacity Report"
-    # Check headers
-    headers = [cell.value for cell in ws[3]]
-    assert headers[:7] == [
-        "Namespace", "CPU Requests (m)", "Memory Requests (Mi)",
-        "CPU Limits (m)", "Memory Limits (Mi)", "% CPU allocated on Cluster", "% Memory allocated on Cluster"
-    ]
-    # Check that totals row exists in any row
-    found_totals = False
-    print('Excel rows:')
-    for row in ws.iter_rows():
-        print([str(cell.value) for cell in row])
-        if any(str(cell.value).lower().strip() == "totals" for cell in row if cell.value):
-            found_totals = True
+    # Locate summary headers row (contains 'Scope')
+    scope_row = None
+    for r in range(1, 30):
+        if ws.cell(row=r, column=1).value == 'Scope':
+            scope_row = r
             break
-    assert found_totals
-    # Check summary table headers
-    summary_headers = [cell.value for cell in ws[ws.max_row-4]]
-    assert summary_headers[:5] == [
-        "Scope", "CPU (m)", "CPU % Allocatable", "Memory (Mi)", "Memory % Allocatable"
+    assert scope_row, 'Scope header row not found'
+    assert [ws.cell(row=scope_row, column=c).value for c in range(1,6)] == [
+        'Scope', 'CPU (m)', 'CPU % Allocatable', 'Memory (Mi)', 'Memory % Allocatable'
     ]
+    # Locate namespace capacity headers row (first cell 'Namespace')
+    ns_header_row = None
+    for r in range(scope_row+1, scope_row+80):
+        if ws.cell(row=r, column=1).value == 'Namespace':
+            ns_header_row = r
+            break
+    assert ns_header_row, 'Namespace capacity header row not found'
+    assert [ws.cell(row=ns_header_row, column=c).value for c in range(1,8)] == [
+        'Namespace', 'CPU Requests (m)', 'Memory Requests (Mi)', 'CPU Limits (m)', 'Memory Limits (Mi)', '% CPU allocated on Cluster', '% Memory allocated on Cluster'
+    ]
+    # Totals row after namespace rows
+    totals_found = False
+    for r in range(ns_header_row+1, ns_header_row+50):
+        if ws.cell(row=r, column=1).value == 'Totals':
+            totals_found = True
+            break
+    assert totals_found, 'Totals row not found in namespace capacity section'
+    # Detail section header (Kind / Workload Name)
+    detail_found = False
+    for r in range(ns_header_row+1, ns_header_row+200):
+        if ws.cell(row=r, column=1).value == 'Kind' and ws.cell(row=r, column=2).value == 'Workload Name':
+            detail_found = True
+            break
+    assert detail_found, 'Per-namespace detail header not found'
     wb.close()
