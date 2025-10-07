@@ -20,22 +20,26 @@ This document summarizes the logic of data extraction, conditional choices, rule
 | MissingMemoryRequestRule | Mem_req_Mi                  | ERROR_MISS   | None, '', '-', 'N/A'          |
 | MissingCpuLimitRule      | CPU_lim_m                   | WARNING_MISS | None, '', '-', 'N/A'          |
 | MissingMemoryLimitRule   | Mem_lim_Mi                  | WARNING_MISS | None, '', '-', 'N/A'          |
+| ReadinessProbeMissingRule| readinessProbe              | ERROR_MISS   | None, '', '-', 'N/A'          |
 | ImagePullPolicyAlwaysRule| imagePullPolicy             | WARNING_MISCONF| 'Always'                     |
 | Requests < 20% Limits    | CPU/Mem requests vs limits  | WARNING_MISCONF| req <= 0.2 * lim             |
-| Limits > node capacity   | CPU/Mem limits vs node      | ERROR_MISCONF | lim > node capacity           |
+| Limits > node allocatable| CPU/Mem limits vs node allocatable | ERROR_MISCONF | lim > node allocatable      |
 
 - Rules are evaluated per cell using the rules engine, which applies the highest severity rule triggered.
 - 0 values are now treated as valid, not missing.
+
 
 ## 3. Math calculations
 
 | Report Type           | Calculation Logic                                      | Aggregation Scope |
 |---------------------- |-------------------------------------------------------|-------------------|
-| container-capacity    | req/lim * replicas, totals per namespace/cluster       | Per container, namespace, cluster |
 | cluster-capacity      | req/lim * replicas, totals per namespace/cluster       | Per container, namespace, cluster |
 | containers-config     | No math, configuration listing only                    | Per container     |
 | summary               | Counts, basic stats                                   | Per cluster       |
-| nodes                 | Capacity, allocatable, totals                         | Per node, cluster |
+| nodes                 | Allocatable, capacity, totals (uses node allocatable)  | Per node, cluster |
+
+**Node Allocatable Usage:**
+- All capacity calculations use node allocatable resources (capacity minus system-reserved and eviction thresholds) for accuracy.
 
 **DaemonSet Calculation Logic:**
 - For DaemonSets, replicas = number of worker nodes (unless nodeSelector targets infra/master, then replicas = 0)
