@@ -76,8 +76,7 @@ class ClusterCapacityReport(ReportGenerator):
             if not pod_spec:
                 continue
             replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
-            if replicas == 0:
-                continue
+            # Do NOT skip workloads with replicas == 0
             if namespace not in ns_totals:
                 ns_totals[namespace] = {'cpu': 0, 'mem': 0, 'cpu_lim': 0, 'mem_lim': 0}
             if namespace not in ns_details:
@@ -154,9 +153,7 @@ class ClusterCapacityReport(ReportGenerator):
             # Use shared calculation logic for consistency across all reports
             replicas = calculate_effective_replicas(kind, manifest, pod_spec, worker_node_count)
             
-            # Skip workloads that don't run on worker nodes (replicas will be 0)
-            if replicas == 0:
-                continue
+            # Do NOT skip workloads with replicas == 0
             
             # Initialize namespace totals if not exists
             if namespace not in ns_totals:
