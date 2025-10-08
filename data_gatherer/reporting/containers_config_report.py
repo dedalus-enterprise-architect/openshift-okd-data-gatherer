@@ -107,6 +107,7 @@ class ContainerConfigurationReport(ReportGenerator):
             from openpyxl import Workbook
             from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
             from openpyxl.utils import get_column_letter
+            from openpyxl.comments import Comment
         except ImportError:
             raise ImportError("openpyxl is required for Excel output. Install with: pip install openpyxl")
         
@@ -157,18 +158,23 @@ class ContainerConfigurationReport(ReportGenerator):
                 header_name = headers[col_idx - 1] if col_idx <= len(headers) else ""
                 
                 # Apply formatting rules similar to HTML version
+                # Add comments for warnings/errors to match HTML tooltips
                 if header_name in ["CPU_req_m", "Mem_req_Mi"] and (value == "" or value is None):
                     cell.fill = error_fill
                     cell.font = error_font
+                    cell.comment = Comment("Missing {} value".format(header_name.replace('_m', '').replace('_Mi', '')), "Copilot")
                 elif header_name in ["CPU_lim_m", "Mem_lim_Mi"] and (value == "" or value is None):
                     cell.fill = warning_fill
                     cell.font = warning_font
+                    cell.comment = Comment("Missing {} value".format(header_name.replace('_m', '').replace('_Mi', '')), "Copilot")
                 elif header_name == "Readiness_Probe" and value == "Not configured":
                     cell.fill = error_fill
                     cell.font = error_font
+                    cell.comment = Comment("ReadinessProbe missing", "Copilot")
                 elif header_name == "Image_Pull_Policy" and value == "Always":
                     cell.fill = warning_fill
                     cell.font = warning_font
+                    cell.comment = Comment("ImagePullPolicy set to Always", "Copilot")
                 
                 # Set alignment based on column type
                 if header_name in ["CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi", "Replicas"]:
