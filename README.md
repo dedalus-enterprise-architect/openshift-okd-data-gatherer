@@ -4,13 +4,19 @@
 OpenShift Data Gatherer is a snapshot tool for collecting controller manifests and node capacity from OpenShift clusters. It produces concise reports for capacity planning and configuration auditing. The focus is on sizing, configuration consistency, and inventory — not live metrics.
 
 ---
-## 1. What You Get
 
-* A repeatable snapshot (current state only) of selected workload kinds and nodes
-* Reports in HTML and Excel formats with hints
-* Only first sync requires a connection to target cluster
+## 1. How Does It Work?
 
-The database always reflects the latest sync; removed objects disappear automatically (no history retention/purging to manage).
+The data gatherer follows a simple workflow to collect, store, and report cluster data:
+
+1. **Initialization**: Set up local storage for each cluster using the `init` command. This creates a dedicated database for storing snapshots.
+2. **Configuration**: Define clusters and authentication in `config/config.yaml`. Optionally, set up read-only RBAC in your cluster for secure access.
+3. **Data Collection (Sync)**: Run the `sync` command to connect to the cluster and fetch manifests and node capacity. Only the current state is collected—no historical data is retained.
+4. **Snapshot Storage**: The latest cluster state is saved in the local database. Removed objects are automatically purged on each sync.
+5. **Reporting**: Generate HTML or Excel reports using the `report` command. Reports cover capacity, configuration, and inventory, not live metrics. Output files are saved in `clusters/<cluster>/reports/`.
+6. **Review & Audit**: Open generated reports for analysis, capacity planning, and configuration auditing.
+
+This workflow ensures repeatable, up-to-date snapshots and reports for OpenShift/OKD clusters, supporting inventory, sizing, and compliance needs.
 
 ---
 ## 2. Typical Use Cases
@@ -28,13 +34,13 @@ The database always reflects the latest sync; removed objects disappear automati
 1. (If not already) Clone this repository and `cd` into it.
 2. Create & activate a Python virtual environment.
 3. Install dependencies: `pip install -r requirements.txt`.
-4. Copy the sample config: `cp config/example-config.yaml config/config.yaml`.
+4. Copy the sample config: `cp config/example-config.yaml config/config.yaml` ([`config/example-config.yaml`](config/example-config.yaml)).
 5. Edit `config/config.yaml` with at least one cluster (choose ONE auth method per cluster).
 6. (Optional, but recommended first time) Set up read‑only RBAC in the cluster; see Section 5 and run `rbac/setup-rbac.sh` to obtain token/host values, then update the config.
 7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
 8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
 9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.
-10. Open the reports in `clusters/my-cluster/reports/` (HTML) or your chosen output path (Excel).
+10. Open the reports in [`clusters/my-cluster/reports/`](clusters/) (HTML) or your chosen output path (Excel).
 
 
 ### Usage Examples
@@ -75,13 +81,13 @@ The following Kubernetes/OpenShift resource kinds are supported for snapshot and
 
 ---
 ## 5. Configuration
-See `config/README.md` for configuration instructions, authentication methods, and example templates.
+See [`config/README.md`](config/README.md) for configuration instructions, authentication methods, and example templates.
 
 ---
 ## 6. RBAC (One-Time Cluster Prep)
-Use the provided read‑only role for a service account. Run the helper script `rbac/setup-rbac.sh` (see that file for usage) to output a configuration snippet containing token and host; place the snippet inside your `config/config.yaml`.
+Use the provided read‑only role for a service account. Run the helper script [`rbac/setup-rbac.sh`](rbac/setup-rbac.sh) (see that file for usage) to output a configuration snippet containing token and host; place the snippet inside your `config/config.yaml`.
 
-For manual steps or permission details see `rbac/README.md`.
+For manual steps or permission details see [`rbac/README.md`](rbac/README.md).
 
 ---
 ## 7. Core Commands & Options
@@ -134,9 +140,9 @@ python -m data_gatherer.run kinds
 
 ### Report Types
 Use `python -m data_gatherer.run report --list-types` to see all available types.
-For detailed descriptions of each report, output formats, and legend, see `data_gatherer/reporting/README.md`.
+For detailed descriptions of each report, output formats, and legend, see [`data_gatherer/reporting/README.md`](data_gatherer/reporting/README.md).
 
-> **See also:** [Core logic and rules summary](./core_logic.md) — for detailed tables on extraction, filtering, rules, and math logic used in all reports.
+> **See also:** [Core logic and rules summary](core_logic.md) — for detailed tables on extraction, filtering, rules, and math logic used in all reports.
 
 ## 8. Node Sizing Snapshot
 Include `Node` in `include_kinds` to capture per-node capacity and attributes. View with the `nodes` command or nodes report. This is a point-in-time view.
@@ -163,5 +169,5 @@ Troubleshooting:
 
 **Can I add custom resource kinds?** Limit to the listed supported kinds for now.
 
-**Where are raw manifests?** Under `clusters/<cluster>/manifests/<Kind>/` unless `write_manifest_files: false`.
+**Where are raw manifests?** Under [`clusters/<cluster>/manifests/<Kind>/`](clusters/) unless `write_manifest_files: false`.
 
