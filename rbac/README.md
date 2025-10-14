@@ -4,22 +4,27 @@
 Dedicated directory for Role-Based Access Control assets used by the Data Gatherer.
 
 ## Files
-- `data-gatherer-cluster-role.yaml` - Read-only ClusterRole
-- `data-gatherer-cluster-role-binding.yaml` - ClusterRoleBinding linking service account
-- `setup-rbac.sh` - Helper script to install RBAC and output config snippet
+Cluster-scoped (grants read across entire cluster):
 
-## Quick Setup
+Namespace-scoped (restricts to explicit namespaces only):
+ `data-gatherer-role-namespace.yaml` - Role applied per target namespace
+ `data-gatherer-rolebinding-namespace.yaml` - RoleBinding applied per target namespace
+ `setup-rbac-namespace.sh` - Helper script to install namespace-scoped RBAC for one or more namespaces
+
+Legacy / compatibility (will be removed in a future release):
+
+## Quick Setup (Cluster-Scoped)
 ```bash
 oc login https://your-cluster-api:6443
 cd rbac/
-./setup-rbac.sh
+./setup-rbac-cluster.sh
 ```
 Copy the emitted YAML snippet into `config/config.yaml`.
 
 ## Manual Setup
 ```bash
-oc apply -f data-gatherer-cluster-role.yaml
-oc apply -f data-gatherer-cluster-role-binding.yaml
+oc apply -f data-gatherer-clusterrole.yaml
+oc apply -f data-gatherer-clusterrolebinding.yaml
 oc create serviceaccount data-gatherer -n openshift
 oc create token data-gatherer -n openshift --duration=8760h
 ```
@@ -34,10 +39,26 @@ oc create token data-gatherer -n openshift --duration=8760h
 ```
 
 ## Customization
-Override namespace/service account:
+Override namespace/service account (cluster-scoped example):
 ```bash
-NAMESPACE=my-ns SERVICE_ACCOUNT_NAME=my-gatherer ./setup-rbac.sh
+SERVICE_ACCOUNT_NAMESPACE=my-ns SERVICE_ACCOUNT_NAME=my-gatherer ./setup-rbac-cluster.sh
 ```
-Update `cluster-role-binding` subject + config token accordingly.
+
+Namespace-scoped example:
+```bash
+SERVICE_ACCOUNT_NAMESPACE=automation SERVICE_ACCOUNT_NAME=dg ./setup-rbac-namespace.sh team-a team-b
+```
+Produces config snippet with `namespace_scoped: true` and `include_namespaces` entries.
+
+Manual namespace-scoped setup (example for namespaces team-a and team-b):
+```bash
+for ns in team-a team-b; do
+	oc create namespace "$ns" --dry-run=client -o yaml | oc apply -f -
+	sed "s/TARGET_NAMESPACE/$ns/" data-gatherer-role-namespace.yaml | oc apply -f -
+	sed "s/TARGET_NAMESPACE/$ns/" data-gatherer-rolebinding-namespace.yaml \
+		| sed "s/TARGET_SERVICE_ACCOUNT_NAME/data-gatherer/; s/TARGET_SERVICE_ACCOUNT_NAMESPACE/openshift/" \
+		| oc apply -f -
+done
+```
 
 Refer to `config/README.md` for configuration details.

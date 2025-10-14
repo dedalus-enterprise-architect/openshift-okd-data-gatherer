@@ -9,7 +9,7 @@ from .cluster.context import get_cluster_cfg, get_cluster_paths, open_cluster_db
 from .persistence.queries import NodeQueries
 from .export.manifest import ManifestExporter
 from .sync.engine import SyncEngine
-from .kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources
+from .kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources, list_namespaced_resources
 from .util import logging as log
 from kubernetes import client as k8s_client
 
@@ -86,19 +86,26 @@ def status(ctx, clusters, all_clusters):
         out[cluster] = db.summary(cluster)
     click.echo(json.dumps(out if len(out) > 1 else next(iter(out.values())), indent=2))
 
-def _fetch_kind_items(api_client, kind, api_version, plural, target, namespaced):
-    log.info('listing kind', kind=kind, api_version=api_version, namespaced=namespaced)
+def _fetch_kind_items(api_client, kind, api_version, plural, target, namespaced, namespace: str | None = None):
+    if namespace:
+        log.info('listing kind in namespace', kind=kind, namespace=namespace, api_version=api_version)
+    else:
+        log.info('listing kind cluster-wide', kind=kind, api_version=api_version, namespaced=namespaced)
     items = []
     try:
-        for item in list_resources(api_client, api_version, plural):
-            if namespaced:
-                ns = item.get('metadata', {}).get('namespace', 'default')
-                if target.is_namespace_excluded(ns):
-                    continue
-            items.append(item)
+        if namespace:
+            for item in list_namespaced_resources(api_client, api_version, plural, namespace):
+                items.append(item)
+        else:
+            for item in list_resources(api_client, api_version, plural):
+                if namespaced:
+                    ns = item.get('metadata', {}).get('namespace', 'default')
+                    if target.is_namespace_excluded(ns):
+                        continue
+                items.append(item)
         return kind, items, None
     except Exception as e:
-        log.error('failed to fetch kind', kind=kind, error=str(e))
+        log.error('failed to fetch kind', kind=kind, namespace=namespace, error=str(e))
         return kind, [], str(e)
 
 @cli.command(add_help_option=False)
@@ -144,10 +151,27 @@ def sync(ctx, clusters, all_clusters, kind):
         skipped = []
         fetched_per_kind = {}
         errors = {}
-        max_workers = min(target.parallelism, len(kind_map))
-        log.info('starting parallel fetch', cluster=cluster, max_workers=max_workers, total_kinds=len(kind_map))
+        # Namespace-scoped mode transformation
+        namespace_mode = getattr(target, 'namespace_scoped', False)
+        include_namespaces = getattr(target, 'include_namespaces', None)
+        if namespace_mode:
+            if not include_namespaces:
+                raise click.ClickException(f'Cluster {cluster} has namespace_scoped=true but no include_namespaces specified')
+            # Filter out cluster-scoped kinds (namespaced flag false)
+            filtered_kind_map = {k: v for k, v in kind_map.items() if v[2]}
+            skipped_cluster_scoped = set(kind_map.keys()) - set(filtered_kind_map.keys())
+            if skipped_cluster_scoped:
+                log.warn('skipping cluster-scoped kinds in namespace-scoped mode', cluster=cluster, skipped=list(skipped_cluster_scoped))
+            kind_map = filtered_kind_map
+            # Expand tasks for each (kind, namespace)
+            tasks = [(k, ns) for k in kind_map.keys() for ns in include_namespaces]
+            max_workers = min(target.parallelism, len(tasks))
+            log.info('starting parallel fetch (namespace-scoped)', cluster=cluster, max_workers=max_workers, total_tasks=len(tasks))
+        else:
+            max_workers = min(target.parallelism, len(kind_map))
+            log.info('starting parallel fetch', cluster=cluster, max_workers=max_workers, total_kinds=len(kind_map))
         from .persistence.db import WorkloadDB as _DBFactory
-        def _fetch_and_sync(single_kind: str):
+        def _fetch_and_sync_cluster(single_kind: str):
             api_version, plural, namespaced = kind_map[single_kind]
             _, items, error = _fetch_kind_items(api_client, single_kind, api_version, plural, target, namespaced)
             if error:
@@ -157,27 +181,46 @@ def sync(ctx, clusters, all_clusters, kind):
             alive_keys = thread_engine.sync_kind(api_version, single_kind, items)
             thread_db._conn.close()
             return {'kind': single_kind, 'items': items, 'alive': alive_keys}
+
+        def _fetch_and_sync_namespaced(single_kind: str, ns: str):
+            api_version, plural, _ = kind_map[single_kind]
+            _, items, error = _fetch_kind_items(api_client, single_kind, api_version, plural, target, True, namespace=ns)
+            if error:
+                return {'kind': single_kind, 'namespace': ns, 'error': error}
+            thread_db = _DBFactory(paths.db_path)
+            thread_engine = SyncEngine(thread_db, cluster)
+            alive_keys = thread_engine.sync_kind(api_version, single_kind, items)
+            thread_db._conn.close()
+            return {'kind': single_kind, 'namespace': ns, 'items': items, 'alive': alive_keys}
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {executor.submit(_fetch_and_sync, k): k for k in kind_map.keys()}
+            if namespace_mode:
+                future_map = {executor.submit(_fetch_and_sync_namespaced, k, ns): (k, ns) for k, ns in tasks}
+            else:
+                future_map = {executor.submit(_fetch_and_sync_cluster, k): (k, None) for k in kind_map.keys()}
             for fut in as_completed(future_map):
                 result = fut.result()
                 kind_name = result['kind']
+                ns = result.get('namespace')
+                key_for_errors = f"{kind_name}/{ns}" if ns else kind_name
                 if 'error' in result:
-                    errors[kind_name] = result['error']
-                    skipped.append(kind_name)
+                    errors[key_for_errors] = result['error']
+                    if not namespace_mode:
+                        skipped.append(kind_name)
                     continue
                 items = result['items']
                 alive = result['alive']
-                fetched_per_kind[kind_name] = len(items)
+                fetched_per_kind[kind_name] = fetched_per_kind.get(kind_name, 0) + len(items)
                 all_alive.extend(alive)
-                successful_kinds.append(kind_name)
-                if not items:
+                if kind_name not in successful_kinds:
+                    successful_kinds.append(kind_name)
+                if not items and not namespace_mode:
                     existing_dir = os.path.join(manifests_dir, kind_name)
                     if not (os.path.exists(existing_dir) and any(os.scandir(existing_dir))):
                         skipped.append(kind_name)
                 if items:
-                    _, _, is_namespaced = kind_map[kind_name]
-                    exporter.export_kind(kind_name, items, is_namespaced)
+                    # exporter expects parameter order (kind, items, namespaced)
+                    exporter.export_kind(kind_name, items, True)
         removed = engine.finalize(all_alive, kinds_scope=successful_kinds)
         configured_kinds = set(target.include_kinds)
         current_summary = db.summary(cluster)

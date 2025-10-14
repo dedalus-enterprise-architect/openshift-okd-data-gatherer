@@ -1,0 +1,43 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: data-gatherer
+  namespace: TARGET_NAMESPACE
+  labels:
+    app: data-gatherer
+rules:
+# Workload controllers
+- apiGroups: ["apps"]
+  resources: ["deployments","statefulsets","daemonsets","replicasets"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs","cronjobs"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["apps.openshift.io"]
+  resources: ["deploymentconfigs"]
+  verbs: ["get","list","watch"]
+
+# Workload pods & config
+- apiGroups: [""]
+  resources: ["pods","persistentvolumeclaims","services","configmaps","secrets"]
+  verbs: ["get","list","watch"]
+
+# Routes (OpenShift)
+- apiGroups: ["route.openshift.io"]
+  resources: ["routes"]
+  verbs: ["get","list","watch"]
+
+# Builds (OpenShift)
+- apiGroups: ["build.openshift.io"]
+  resources: ["builds","buildconfigs"]
+  verbs: ["get","list","watch"]
+
+# Autoscaling
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get","list","watch"]
+
+# Quotas / limits within namespace
+- apiGroups: [""]
+  resources: ["resourcequotas","limitranges"]
+  verbs: ["get","list","watch"]

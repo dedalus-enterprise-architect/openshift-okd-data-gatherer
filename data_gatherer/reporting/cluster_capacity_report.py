@@ -215,12 +215,11 @@ class ClusterCapacityReport(ReportGenerator):
         """
         try:
             cur = db._conn.cursor()
-            # Enhanced query: Include nodes marked as worker OR nodes that are not master/infra
             node_rows = cur.execute(
                 """SELECT cpu_allocatable, memory_allocatable, cpu_capacity, memory_capacity, node_role
-                   FROM node_capacity
-                   WHERE cluster=? AND deleted=0 
-                   AND (node_role='worker' OR (node_role NOT IN ('master', 'infra')))""",
+                       FROM node_capacity
+                       WHERE cluster=? AND deleted=0 
+                       AND (node_role='worker' OR (node_role NOT IN ('master', 'infra')))""",
                 (cluster,)
             ).fetchall()
         except Exception:
@@ -233,11 +232,14 @@ class ClusterCapacityReport(ReportGenerator):
             total_cpu_alloc += (cpu_to_milli(cpu_alloc) or cpu_to_milli(cpu_cap) or 0)
             total_mem_alloc += (mem_to_mi(mem_alloc) or mem_to_mi(mem_cap) or 0)
 
-        return {
+        data = {
             'total_cpu_alloc': total_cpu_alloc,
             'total_mem_alloc': total_mem_alloc,
             'worker_node_count': worker_node_count
         }
+        if worker_node_count == 0:
+            data['namespace_scoped'] = True
+        return data
 
     def _calculate_summary_totals(self, ns_totals: Dict[str, Dict[str, int]]) -> Dict[str, int]:
         """

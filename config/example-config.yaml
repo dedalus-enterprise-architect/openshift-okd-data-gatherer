@@ -46,6 +46,18 @@ clusters:
     exclude_namespaces: [monitoring, logging]
     parallelism: 6
 
+  # Namespace-scoped (least-privilege) example
+  - name: app-namespaces
+    namespace_scoped: true            # enable namespace allow-list mode
+    include_namespaces: [payments, auth, monitoring]
+    credentials:
+      host: https://api.restricted.company.com:6443
+      token: "<namespace-scope-sa-token>"
+      verify_ssl: true
+    # Node is omitted automatically; only namespaced kinds are collected
+    include_kinds: [Deployment, StatefulSet, DaemonSet, CronJob, ConfigMap]
+    parallelism: 4
+
 # Global settings
 logging:
   level: INFO

@@ -85,3 +85,41 @@ def list_resources(api_client: k8s_client.ApiClient, api_version: str, plural: s
 
 def resolve_kinds(include_kinds: List[str]) -> Dict[str, Tuple[str, str, bool]]:
     return {k: STATIC_KIND_MAP[k] for k in include_kinds if k in STATIC_KIND_MAP}
+
+def list_namespaced_resources(api_client: k8s_client.ApiClient, api_version: str, plural: str, namespace: str, max_retries: int = 4, backoff_base: float = 0.5) -> Iterable[Dict[str, Any]]:
+    """List resources restricted to a given namespace (namespace-scoped mode)."""
+    group, version = _split_api_version(api_version)
+    base = f"/api/{version}/namespaces/{namespace}/{plural}" if group is None else f"/apis/{group}/{version}/namespaces/{namespace}/{plural}"
+    cont = None
+    while True:
+        query = f"?continue={cont}" if cont else ''
+        url = base + query
+        attempt = 0
+        while True:
+            try:
+                resp = api_client.call_api(url, 'GET', response_type='object', _preload_content=False, auth_settings=['BearerToken'])
+                payload = json.loads(resp[0].data)
+                break
+            except ApiException as e:
+                status = getattr(e, 'status', None)
+                if status in (403, 404):
+                    log.warn('skipping namespace due to access/availability', api_version=api_version, plural=plural, namespace=namespace, status=status)
+                    return
+                if status in (429, 500, 502, 503, 504) and attempt < max_retries:
+                    sleep_for = backoff_base * (2 ** attempt)
+                    log.warn('transient error, retrying', api_version=api_version, plural=plural, namespace=namespace, status=status, attempt=attempt+1, sleep=sleep_for)
+                    time.sleep(sleep_for); attempt += 1; continue
+                log.error('failed listing namespaced resources', api_version=api_version, plural=plural, namespace=namespace, status=status, reason=str(e))
+                return
+            except Exception as e:
+                if attempt < max_retries:
+                    sleep_for = backoff_base * (2 ** attempt)
+                    log.warn('generic error, retrying', api_version=api_version, plural=plural, namespace=namespace, attempt=attempt+1, sleep=sleep_for, error=str(e))
+                    time.sleep(sleep_for); attempt += 1; continue
+                log.error('unhandled error listing namespaced resources', api_version=api_version, plural=plural, namespace=namespace, error=str(e))
+                return
+        for item in payload.get('items', []):
+            yield item
+        cont = payload.get('metadata', {}).get('continue')
+        if not cont:
+            break

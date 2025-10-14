@@ -31,6 +31,9 @@ class ClusterConfig:
     exclude_namespace_patterns: List[str] = field(default_factory=list)
     ignore_system_namespaces: bool = True
     parallelism: int = 4
+    # New namespace-scoped mode fields
+    include_namespaces: Optional[List[str]] = None  # Explicit allow-list when namespace_scoped
+    namespace_scoped: bool = False  # When true, only fetch specified namespaces using namespaced list APIs
     def is_namespace_excluded(self, namespace: str) -> bool:
         if namespace in self.exclude_namespaces:
             return True
@@ -101,7 +104,7 @@ def load_config(path: str = DEFAULT_CONFIG_FILE) -> AppConfig:
                 ca_file=creds_data.get('ca_file'),
                 verify_ssl=creds_data.get('verify_ssl', True)
             )
-        clusters.append(ClusterConfig(
+        cluster_cfg = ClusterConfig(
             name=c['name'],
             kubeconfig=c.get('kubeconfig'),
             credentials=credentials,
@@ -109,8 +112,18 @@ def load_config(path: str = DEFAULT_CONFIG_FILE) -> AppConfig:
             exclude_namespaces=exact,
             exclude_namespace_patterns=patterns,
             ignore_system_namespaces=ignore_system,
-            parallelism=c.get('parallelism', 4)
-        ))
+            parallelism=c.get('parallelism', 4),
+            include_namespaces=c.get('include_namespaces'),
+            namespace_scoped=c.get('namespace_scoped', False)
+        )
+        # Basic validation for namespace-scoped mode
+        if cluster_cfg.namespace_scoped:
+            if not cluster_cfg.include_namespaces or not isinstance(cluster_cfg.include_namespaces, list):
+                raise ValueError(f"Cluster {cluster_cfg.name} namespace_scoped=true requires include_namespaces list")
+            # Remove duplicates while preserving order
+            seen = set()
+            cluster_cfg.include_namespaces = [ns for ns in cluster_cfg.include_namespaces if not (ns in seen or seen.add(ns))]
+        clusters.append(cluster_cfg)
     if not clusters:
         raise ValueError('No clusters defined in configuration')
     for cluster in clusters:

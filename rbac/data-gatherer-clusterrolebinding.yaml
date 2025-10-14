@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: data-gatherer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: data-gatherer
+subjects:
+- kind: ServiceAccount
+  name: TARGET_SERVICE_ACCOUNT_NAME
+  namespace: TARGET_SERVICE_ACCOUNT_NAMESPACE

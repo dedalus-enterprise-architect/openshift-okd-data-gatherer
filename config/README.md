@@ -45,6 +45,8 @@ Additional per-cluster fields:
 * `ignore_system_namespaces`: auto-exclude system namespaces (boolean)
 * `exclude_namespaces`: additional namespace exclusions (supports wildcards)
 * `parallelism`: concurrent workers for data collection
+* `namespace_scoped`: (boolean, default `false`) enable strict namespace allow‑list mode (see below)
+* `include_namespaces`: explicit list of namespaces to collect when `namespace_scoped: true`
 
 ### Authentication Methods
 
@@ -94,6 +96,36 @@ clusters:
 * Wildcards are supported for pattern matching in both global and cluster-specific exclusions
 * Custom exclusions in `exclude_namespaces` are applied in addition to system namespace filtering
 
+### Namespace-Scoped Mode (Least-Privilege Collection)
+Use this mode when cluster-wide read permissions (ClusterRole) are not allowed. Enable by setting `namespace_scoped: true` and providing an explicit `include_namespaces` list. In this mode:
+* Only the listed namespaces are queried (using namespaced API endpoints)
+* Cluster-scoped kinds (e.g. `Node`) are automatically skipped even if present in `include_kinds`
+* `ignore_system_namespaces` / `exclude_namespaces` are ignored (the allow‑list takes precedence)
+* Reports that rely on node capacity will mark cluster totals as *N/A* (capacity ratios not computed)
+
+Example (namespace scoped):
+```yaml
+clusters:
+  - name: app-silo
+    namespace_scoped: true
+    include_namespaces:
+      - payments
+      - auth
+      - monitoring
+    credentials:
+      host: https://api.cluster.example.com:6443
+      token: "<sa-token>"
+      verify_ssl: true
+    include_kinds: [Deployment, StatefulSet, DaemonSet, CronJob, ConfigMap]
+    parallelism: 6
+```
+
+Limitations:
+* Node, Namespace and other cluster‑scoped resources are not collected
+* Capacity / utilization sections depending on node allocatable are omitted
+* Add `ConfigMap` to `include_kinds` if you rely on JAVA_OPTS parsing in container configuration reports
+* To switch back, set `namespace_scoped: false` (or remove the field) and remove `include_namespaces`
+
 ### Complete Example
 ```yaml
 clusters:
@@ -105,6 +137,16 @@ clusters:
     include_kinds: [Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, Node]
     ignore_system_namespaces: true
     exclude_namespaces: []
+    parallelism: 4
+
+  - name: restricted-ns-mode
+    namespace_scoped: true
+    include_namespaces: [team-a, team-b]
+    credentials:
+      host: https://api.cluster.example.com:6443
+      token: "eyJhbG..."
+      verify_ssl: true
+    include_kinds: [Deployment, StatefulSet, DaemonSet, CronJob, ConfigMap]
     parallelism: 4
 
 system_namespaces:
