@@ -31,12 +31,16 @@ This workflow ensures repeatable, up-to-date snapshots and reports for OpenShift
 
 ---
 ## 3. Quick Start
-1. (If not already) Clone this repository and `cd` into it.
+
+1. Clone this repository and `cd` into it.
 2. Create & activate a Python virtual environment.
 3. Install dependencies: `pip install -r requirements.txt`.
 4. Copy the sample config: `cp config/example-config.yaml config/config.yaml` ([`config/example-config.yaml`](config/example-config.yaml)).
 5. Edit `config/config.yaml` with at least one cluster (choose ONE auth method per cluster).
-6. (Optional, but recommended first time) Set up read‑only RBAC in the cluster; see Section 5 and run `rbac/setup-rbac.sh` to obtain token/host values, then update the config.
+6. (Recommended) Set up read-only RBAC in your cluster:
+	- For cluster-wide access: `cd rbac/ && ./setup-rbac-cluster.sh [--dry-run] [--delete] [--confirm yes]`
+	- For namespace-restricted access: `cd rbac/ && ./setup-rbac-namespace.sh --namespace team-a --namespace team-b [--dry-run] [--delete] [--confirm yes]`
+	- Copy the emitted YAML snippet into `config/config.yaml`.
 7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
 8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
 9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.
@@ -83,11 +87,23 @@ The following Kubernetes/OpenShift resource kinds are supported for snapshot and
 ## 5. Configuration
 See [`config/README.md`](config/README.md) for configuration instructions, authentication methods, and example templates.
 
+### Namespace-Scoped Mode (Optional)
+If you cannot grant a ClusterRole, you can operate in a restricted mode by setting `namespace_scoped: true` and providing an `include_namespaces` list per cluster. In this mode only those namespaces are queried, and cluster-scoped kinds (e.g. `Node`) are skipped automatically. Capacity sections that depend on node data will show N/A markers. See the RBAC section below and the config docs for details.
+
 ---
 ## 6. RBAC (One-Time Cluster Prep)
-Use the provided read‑only role for a service account. Run the helper script [`rbac/setup-rbac.sh`](rbac/setup-rbac.sh) (see that file for usage) to output a configuration snippet containing token and host; place the snippet inside your `config/config.yaml`.
+You can choose between two RBAC models:
 
-For manual steps or permission details see [`rbac/README.md`](rbac/README.md).
+| Mode | Scripts / Files | When to Use | Notes |
+|------|------------------|-------------|-------|
+| Cluster-scoped | `rbac/setup-rbac-cluster.sh`, `data-gatherer-clusterrole*.yaml` | You can grant broad read-only access | Includes Node + cluster-wide discovery |
+| Namespace-scoped | `rbac/setup-rbac-namespace.sh`, `data-gatherer-role-namespace*.yaml` | Strict least-privilege environments | Only listed namespaces; Nodes skipped |
+
+Cluster Mode: run `rbac/setup-rbac-cluster.sh` and copy the emitted config snippet (`namespace_scoped: false`).
+
+Namespace Mode: run `rbac/setup-rbac-namespace.sh ns1 ns2 ...` and copy the snippet (contains `namespace_scoped: true` and `include_namespaces`).
+
+For full permission manifests and manual steps see [`rbac/README.md`](rbac/README.md).
 
 ---
 ## 7. Core Commands & Options
@@ -145,7 +161,7 @@ For detailed descriptions of each report, output formats, and legend, see [`data
 > **See also:** [Core logic and rules summary](core_logic.md) — for detailed tables on extraction, filtering, rules, and math logic used in all reports.
 
 ## 8. Node Sizing Snapshot
-Include `Node` in `include_kinds` to capture per-node capacity and attributes. View with the `nodes` command or nodes report. This is a point-in-time view.
+Include `Node` in `include_kinds` (cluster-scoped mode only) to capture per-node capacity and attributes. In namespace-scoped mode node data is intentionally not collected; related report sections will show N/A.
 
 ## 9. Operational Tips
 * Re-run `sync` any time—it safely replaces previous data.
