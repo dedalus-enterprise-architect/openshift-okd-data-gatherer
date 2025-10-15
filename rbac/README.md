@@ -51,7 +51,7 @@ cd rbac/
 ```
 Or:
 ```bash
-./setup-rbac-namespace.sh team-a team-b
+./setup-rbac-namespace.sh --namespace team-a --namespace team-b
 ```
 Supports `--delete`, `--dry-run`, and `--confirm yes` as above.
 Copy the emitted YAML snippet into `config/config.yaml`.
@@ -78,7 +78,7 @@ SERVICE_ACCOUNT_NAMESPACE=my-ns SERVICE_ACCOUNT_NAME=my-gatherer ./setup-rbac-cl
 
 Namespace-scoped example:
 ```bash
-SERVICE_ACCOUNT_NAMESPACE=automation SERVICE_ACCOUNT_NAME=dg ./setup-rbac-namespace.sh team-a team-b
+SERVICE_ACCOUNT_NAMESPACE=automation SERVICE_ACCOUNT_NAME=dg ./setup-rbac-namespace.sh --namespace team-a --namespace team-b
 ```
 Produces config snippet with `namespace_scoped: true` and `include_namespaces` entries.
 

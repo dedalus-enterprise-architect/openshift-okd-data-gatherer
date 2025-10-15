@@ -63,5 +63,11 @@ def test_capacity_report_without_node_data_excel(tmp_path):
     found_notice = any(cell.value == 'No worker node capacity data' for row in ws.iter_rows(min_row=1, max_row=100, max_col=7) for cell in row)
     assert found_notice, 'Expected no-node-capacity notice not found in Excel output'
     # Percent columns should show N/A (search in sheet values)
-    values = [str(cell.value) for row in ws.iter_rows(min_row=1, max_row=60, max_col=7) for cell in row]
-    assert 'N/A' in values
+    # Check that 'N/A' appears in the percentage columns (e.g., columns 6 and 7) of the relevant rows
+    na_found = False
+    for row in ws.iter_rows(min_row=1, max_row=60, max_col=7):
+        # Assuming percentage columns are at index 5 and 6 (6th and 7th columns)
+        if any(str(row[i].value) == 'N/A' for i in [5, 6] if len(row) > i):
+            na_found = True
+            break
+    assert na_found, "Expected 'N/A' in percentage columns for capacity"

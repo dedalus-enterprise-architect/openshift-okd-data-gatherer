@@ -1,6 +1,6 @@
 #!/bin/bash
 # Setup namespace-scoped RBAC for data gatherer
-# Usage: ./setup-namespace-rbac-namespace.sh <namespace1> [namespace2] ...
+# Usage: ./setup-rbac-namespace.sh <namespace1> [namespace2] ...
 # This script is for NAMESPACE-SCOPED RBAC only. For cluster-wide RBAC, use setup-rbac-cluster.sh and cluster-scoped YAML files.
 set -euo pipefail
 NAMESPACES=()

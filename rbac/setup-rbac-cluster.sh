@@ -1,7 +1,7 @@
 #!/bin/bash
 # Setup cluster-scoped RBAC for data gatherer
 # Usage: ./setup-rbac-cluster.sh
-# This script is for CLUSTER-SCOPED RBAC only. For namespace-scoped RBAC, use setup-namespace-rbac-namespace.sh and namespace-scoped YAML files.
+# This script is for CLUSTER-SCOPED RBAC only. For namespace-scoped RBAC, use setup-rbac-namespace.sh and namespace-scoped YAML files.
 set -euo pipefail
 
 DELETE_MODE=false
