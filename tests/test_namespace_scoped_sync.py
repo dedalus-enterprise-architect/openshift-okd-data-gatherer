@@ -1,4 +1,6 @@
-import json, tempfile, os
+import json
+import tempfile
+import os
 from click.testing import CliRunner
 from data_gatherer.run import cli
 

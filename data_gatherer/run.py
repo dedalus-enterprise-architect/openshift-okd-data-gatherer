@@ -12,11 +12,12 @@ from .sync.engine import SyncEngine
 from .kube.client import load_kubeconfig, configure_from_credentials, resolve_kinds, list_resources, list_namespaced_resources
 from .util import logging as log
 from kubernetes import client as k8s_client
+from typing import Any
 
 DEFAULT_DATA_DIR = 'clusters'
 DB_FILENAME = 'data.db'
 
-def _get_file_extension(format_name: str, generator) -> str:
+def _get_file_extension(format_name: str, generator: Any) -> str:
     """Get appropriate file extension based on format."""
     if format_name == 'excel':
         return '.xlsx'
@@ -219,8 +220,9 @@ def sync(ctx, clusters, all_clusters, kind):
                     if not (os.path.exists(existing_dir) and any(os.scandir(existing_dir))):
                         skipped.append(kind_name)
                 if items:
-                    # exporter expects parameter order (kind, items, namespaced)
-                    exporter.export_kind(kind_name, items, True)
+                    # Get the actual namespaced flag for this kind
+                    _, _, is_namespaced = kind_map[kind_name]
+                    exporter.export_kind(kind_name, items, is_namespaced)
         removed = engine.finalize(all_alive, kinds_scope=successful_kinds)
         configured_kinds = set(target.include_kinds)
         current_summary = db.summary(cluster)

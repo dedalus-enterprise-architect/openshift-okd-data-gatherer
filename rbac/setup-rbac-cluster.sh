@@ -91,7 +91,6 @@ if [ "$DRY_RUN" = false ]; then
 fi
 
 echo "Creating service account $SERVICE_ACCOUNT_NAME in $SERVICE_ACCOUNT_NAMESPACE"
-echo "Creating service account $SERVICE_ACCOUNT_NAME in $SERVICE_ACCOUNT_NAMESPACE"
 if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would create serviceaccount: $SERVICE_ACCOUNT_NAME -n $SERVICE_ACCOUNT_NAMESPACE"
 else

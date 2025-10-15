@@ -1,5 +1,7 @@
 from data_gatherer.config import load_config, ClusterConfig
-import tempfile, textwrap, os
+import tempfile
+import textwrap
+import os
 
 def test_namespace_scoped_config_parsing():
     cfg_text = textwrap.dedent("""
