@@ -31,12 +31,16 @@ This workflow ensures repeatable, up-to-date snapshots and reports for OpenShift
 
 ---
 ## 3. Quick Start
-1. (If not already) Clone this repository and `cd` into it.
+
+1. Clone this repository and `cd` into it.
 2. Create & activate a Python virtual environment.
 3. Install dependencies: `pip install -r requirements.txt`.
 4. Copy the sample config: `cp config/example-config.yaml config/config.yaml` ([`config/example-config.yaml`](config/example-config.yaml)).
 5. Edit `config/config.yaml` with at least one cluster (choose ONE auth method per cluster).
-6. (Optional, but recommended first time) Set up read‑only RBAC in the cluster; see Section 5 and run `rbac/setup-rbac.sh` to obtain token/host values, then update the config.
+6. (Recommended) Set up read-only RBAC in your cluster:
+	- For cluster-wide access: `cd rbac/ && ./setup-rbac-cluster.sh [--dry-run] [--delete] [--confirm yes]`
+	- For namespace-restricted access: `cd rbac/ && ./setup-rbac-namespace.sh --namespace team-a --namespace team-b [--dry-run] [--delete] [--confirm yes]`
+	- Copy the emitted YAML snippet into `config/config.yaml`.
 7. Initialize storage for your cluster(s): `python -m data_gatherer.run init --cluster my-cluster` (or `--all-clusters`).
 8. Collect a snapshot: `python -m data_gatherer.run sync --cluster my-cluster`.
 9. Generate reports: `python -m data_gatherer.run report --cluster my-cluster --all`.

@@ -13,6 +13,14 @@ Namespace-scoped (restricts to explicit namespaces only):
 
 Legacy / compatibility (will be removed in a future release):
 
+## Script Features (Current)
+Both `setup-rbac-cluster.sh` and `setup-rbac-namespace.sh` support:
+- `--namespace <ns>`: Specify target namespace(s) (namespace-scoped only)
+- `--delete`: Remove RBAC objects instead of creating
+- `--dry-run`: Preview changes without applying
+- `--confirm yes`: Skip confirmation prompt (for automation)
+Confirmation prompt accepts `y` or `yes`.
+
 ## Quick Setup (Cluster-Scoped)
 ```bash
 oc login https://your-cluster-api:6443
@@ -20,6 +28,12 @@ cd rbac/
 ./setup-rbac-cluster.sh
 ```
 Copy the emitted YAML snippet into `config/config.yaml`.
+
+### Script Usage (Cluster-Scoped)
+```bash
+./setup-rbac-cluster.sh [--delete] [--dry-run] [--confirm yes] [--service-account <name>] [--namespace <ns>]
+```
+Default service account: `data-gatherer` in `openshift` namespace. Override with env vars or flags.
 
 ## Manual Setup
 ```bash
@@ -29,6 +43,19 @@ oc create serviceaccount data-gatherer -n openshift
 oc create token data-gatherer -n openshift --duration=8760h
 ```
 
+## Quick Setup (Namespace-Scoped)
+```bash
+oc login https://your-cluster-api:6443
+cd rbac/
+./setup-rbac-namespace.sh --namespace team-a --namespace team-b
+```
+Or:
+```bash
+./setup-rbac-namespace.sh team-a team-b
+```
+Supports `--delete`, `--dry-run`, and `--confirm yes` as above.
+Copy the emitted YAML snippet into `config/config.yaml`.
+
 ## Permissions Summary
 Read-only (`get`, `list`, `watch`) for workloads (Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, DeploymentConfigs, ReplicaSets), core & infra (Namespaces, Nodes, PVs, PVCs, Services, ConfigMaps, Secrets metadata, Pods), OpenShift resources (Routes, ImageStreams, Builds), scaling & policy objects (HPAs, NetworkPolicies, Ingresses, PodDisruptionBudgets, PriorityClasses), quotas/limits, EndpointSlices, CRDs, and non-resource discovery endpoints.
 
@@ -36,6 +63,11 @@ Read-only (`get`, `list`, `watch`) for workloads (Deployments, StatefulSets, Dae
 Regenerate annually:
 ```bash
 oc create token data-gatherer -n openshift --duration=8760h
+```
+
+For namespace-scoped, use the correct namespace:
+```bash
+oc create token data-gatherer -n <namespace> --duration=8760h
 ```
 
 ## Customization
@@ -50,6 +82,11 @@ SERVICE_ACCOUNT_NAMESPACE=automation SERVICE_ACCOUNT_NAME=dg ./setup-rbac-namesp
 ```
 Produces config snippet with `namespace_scoped: true` and `include_namespaces` entries.
 
+### Script Flags (Namespace-Scoped)
+```bash
+./setup-rbac-namespace.sh --namespace team-a --namespace team-b --service-account dg --delete --dry-run --confirm yes
+```
+
 Manual namespace-scoped setup (example for namespaces team-a and team-b):
 ```bash
 for ns in team-a team-b; do
@@ -59,6 +96,12 @@ for ns in team-a team-b; do
 		| sed "s/TARGET_SERVICE_ACCOUNT_NAME/data-gatherer/; s/TARGET_SERVICE_ACCOUNT_NAMESPACE/openshift/" \
 		| oc apply -f -
 done
+```
+
+### Deletion Example
+To remove RBAC objects:
+```bash
+./setup-rbac-namespace.sh --namespace team-a --delete
 ```
 
 Refer to `config/README.md` for configuration details.
