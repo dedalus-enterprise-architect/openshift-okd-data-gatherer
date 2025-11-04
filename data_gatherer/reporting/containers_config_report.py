@@ -393,7 +393,9 @@ class ContainerConfigurationReport(ReportGenerator):
         .report-table td:nth-child(3) { font-weight: 500; }
         .report-table td:nth-child(4) { font-family: monospace; }
         .report-table td:nth-child(5) { font-weight: bold; text-align: center; }
-        .report-table td:nth-child(6) { font-family: monospace; font-size: 10px; min-width: 200px; word-break: break-all; }
+        .report-table td:nth-child(6),
+        .report-table td:nth-child(15),
+        .report-table td:nth-child(16) { font-family: monospace; font-size: 10px; min-width: 200px; word-break: break-all; }
         .report-table td:nth-child(8),
         .report-table td:nth-child(9),
         .report-table td:nth-child(10),
@@ -401,7 +403,7 @@ class ContainerConfigurationReport(ReportGenerator):
         .report-table td:nth-child(12) { font-size: 11px; }
         .report-table td:nth-child(13) { font-weight: 500; }
         .report-table td:nth-child(14) { font-size: 11px; }
-        .report-table td:nth-child(15) { font-size: 10px; min-width: 200px; }
+        @media (max-width: 1400px) { .report-table { font-size: 11px; } .report-table td { padding: 6px; } .report-table td:nth-child(6), .report-table td:nth-child(15), .report-table td:nth-child(16) { min-width: 200px; } }
         .report-table td:nth-child(16) { font-family: monospace; font-size: 10px; min-width: 250px; }
         @media (max-width: 1400px) { .report-table { font-size: 11px; } .report-table td { padding: 6px; } .report-table td:nth-child(6), .report-table td:nth-child(15), .report-table td:nth-child(16) { min-width: 150px; } }
         @media (max-width: 900px) { .report-table { display: block; overflow-x: auto; white-space: nowrap; } }
