@@ -121,6 +121,7 @@ def test_containers_config_report_generation(tmp_path):
     assert "Name" in content
     assert "Container" in content
     assert "Type" in content
+    assert "Image" in content
     
     # Check resource columns
     assert "CPU_req_m" in content
@@ -143,6 +144,10 @@ def test_containers_config_report_generation(tmp_path):
     assert "init-container" in content
     assert "main" in content
     assert "init" in content
+    
+    # Check image values
+    assert "test:latest" in content  # Main container image
+    assert "init:latest" in content  # Init container image
     
     # Check resource values
     assert "100" in content  # CPU request 100m

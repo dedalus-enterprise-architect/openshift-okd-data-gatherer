@@ -65,6 +65,7 @@ class ContainerConfigurationReport(ReportGenerator):
             containers += [(c, 'init') for c in pod_spec.get('initContainers', [])]
             for cdef, ctype in containers:
                 container_name = cdef.get('name', 'Unknown')
+                image = cdef.get('image', 'Unknown')
                 resources = cdef.get('resources', {})
                 requests = resources.get('requests', {})
                 limits = resources.get('limits', {})
@@ -81,6 +82,7 @@ class ContainerConfigurationReport(ReportGenerator):
                     name,
                     container_name,
                     ctype,
+                    image,
                     replicas if replicas is not None else '',
                     cpu_req if cpu_req is not None else '',
                     cpu_lim if cpu_lim is not None else '',
@@ -95,7 +97,7 @@ class ContainerConfigurationReport(ReportGenerator):
                 table_rows.append(row)
         
         headers = [
-            "Kind", "Namespace", "Name", "Container", "Type",
+            "Kind", "Namespace", "Name", "Container", "Type", "Image",
             "Replicas", "CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi",
             "Readiness_Probe", "Image_Pull_Policy", "Node_Selectors", "Pod_Labels", "Java_Opts"
         ]
@@ -132,7 +134,7 @@ class ContainerConfigurationReport(ReportGenerator):
         warning_font = Font(color="856404")
         
         # Write title
-        ws.merge_cells('A1:O1')
+        ws.merge_cells('A1:P1')
         title_cell = ws['A1']
         title_cell.value = title
         title_cell.font = Font(bold=True, size=16)
@@ -194,6 +196,8 @@ class ContainerConfigurationReport(ReportGenerator):
                 ws.column_dimensions[column_letter].width = 10
             elif header_name in ["Node_Selectors", "Pod_Labels", "Java_Opts"]:
                 ws.column_dimensions[column_letter].width = 40
+            elif header_name == "Image":
+                ws.column_dimensions[column_letter].width = 45
             elif header_name in ["Namespace", "Name", "Container"]:
                 ws.column_dimensions[column_letter].width = 20
             else:
@@ -339,6 +343,7 @@ class ContainerConfigurationReport(ReportGenerator):
                     "<strong>Name</strong>: Workload name",
                     "<strong>Container</strong>: Container name inside spec",
                     "<strong>Type</strong>: main or init",
+                    "<strong>Image</strong>: Container image with tag",
                     "<strong>Replicas</strong>: Desired replicas (DaemonSet blank)",
                     "<strong>CPU_req_m</strong>: CPU requests in millicores",
                     "<strong>CPU_lim_m</strong>: CPU limits in millicores",
@@ -388,16 +393,19 @@ class ContainerConfigurationReport(ReportGenerator):
         .report-table td:nth-child(3) { font-weight: 500; }
         .report-table td:nth-child(4) { font-family: monospace; }
         .report-table td:nth-child(5) { font-weight: bold; text-align: center; }
-        .report-table td:nth-child(7),
+        .report-table td:nth-child(6),
+        .report-table td:nth-child(15),
+        .report-table td:nth-child(16) { font-family: monospace; font-size: 10px; min-width: 200px; word-break: break-all; }
         .report-table td:nth-child(8),
         .report-table td:nth-child(9),
-        .report-table td:nth-child(10) { font-family: monospace; text-align: right; }
-        .report-table td:nth-child(11) { font-size: 11px; }
-        .report-table td:nth-child(12) { font-weight: 500; }
-        .report-table td:nth-child(13) { font-size: 11px; }
-        .report-table td:nth-child(14) { font-size: 10px; min-width: 200px; }
-        .report-table td:nth-child(15) { font-family: monospace; font-size: 10px; min-width: 250px; }
-        @media (max-width: 1400px) { .report-table { font-size: 11px; } .report-table td { padding: 6px; } .report-table td:nth-child(14), .report-table td:nth-child(15) { min-width: 150px; } }
+        .report-table td:nth-child(10),
+        .report-table td:nth-child(11) { font-family: monospace; text-align: right; }
+        .report-table td:nth-child(12) { font-size: 11px; }
+        .report-table td:nth-child(13) { font-weight: 500; }
+        .report-table td:nth-child(14) { font-size: 11px; }
+        @media (max-width: 1400px) { .report-table { font-size: 11px; } .report-table td { padding: 6px; } .report-table td:nth-child(6), .report-table td:nth-child(15), .report-table td:nth-child(16) { min-width: 200px; } }
+        .report-table td:nth-child(16) { font-family: monospace; font-size: 10px; min-width: 250px; }
+        @media (max-width: 1400px) { .report-table { font-size: 11px; } .report-table td { padding: 6px; } .report-table td:nth-child(6), .report-table td:nth-child(15), .report-table td:nth-child(16) { min-width: 150px; } }
         @media (max-width: 900px) { .report-table { display: block; overflow-x: auto; white-space: nowrap; } }
         </style>
         """
