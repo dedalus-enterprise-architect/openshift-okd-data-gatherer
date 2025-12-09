@@ -240,7 +240,7 @@ def sync(ctx, clusters, all_clusters, kind):
         aggregate[cluster] = summary
     click.echo(json.dumps(aggregate if len(aggregate) > 1 else next(iter(aggregate.values())), indent=2))
 
-@cli.command(add_help_option=False)
+@cli.command()
 @click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to report on')
 @click.option('--all-clusters', is_flag=True, help='Generate reports for all configured clusters')
 @click.option('--type', 'report_type', default='summary', help='Report type (default: summary). Use --list-types to view all.')
@@ -250,6 +250,7 @@ def sync(ctx, clusters, all_clusters, kind):
 @click.option('--list-types', is_flag=True, help='List available report types and exit')
 @click.pass_context
 def report(ctx, clusters, all_clusters, report_type, output_format, out, all, list_types):
+    """Generate reports for one or more clusters."""
     from datetime import datetime
     from .reporting.base import get_report_types, get_generator
     from .reporting import summary_report  # noqa: F401
