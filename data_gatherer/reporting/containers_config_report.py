@@ -99,7 +99,7 @@ class ContainerConfigurationReport(ReportGenerator):
         headers = [
             "Kind", "Namespace", "Name", "Container", "Type", "Image",
             "Replicas", "CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi",
-            "Readiness_Probe", "Image_Pull_Policy", "Node_Selectors", "Pod_Labels", "Java_Opts"
+            "Readiness_Probe", "Image_Pull_Policy", "Node_Selectors", "Pod_Labels", "Java_Parameters"
         ]
         return table_rows, headers
 
@@ -215,7 +215,7 @@ class ContainerConfigurationReport(ReportGenerator):
                 ws.column_dimensions[column_letter].width = 12
             elif header_name in ["CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi", "Replicas"]:
                 ws.column_dimensions[column_letter].width = 10
-            elif header_name in ["Node_Selectors", "Pod_Labels", "Java_Opts"]:
+            elif header_name in ["Node_Selectors", "Pod_Labels", "Java_Parameters"]:
                 ws.column_dimensions[column_letter].width = 40
             elif header_name == "Image":
                 ws.column_dimensions[column_letter].width = 45
@@ -268,27 +268,38 @@ class ContainerConfigurationReport(ReportGenerator):
         return "Not configured"
 
     def _extract_java_opts(self, container_def, namespace: str, db: WorkloadDB):
-        # Direct env value first
+        """
+        Extract Java parameters from container environment.
+        Searches for JAVA_OPTS, CATALINA_OPTS, and similar Java-related options.
+        Returns all found parameters combined with their source names.
+        """
+        found_params = {}  # Dict to store param_name -> value
+        
+        # Direct env values first
         env = container_def.get('env', [])
         for env_var in env:
-            var_name = env_var.get('name', '').upper()
-            if 'JAVA' in var_name and 'OPT' in var_name:
+            var_name = env_var.get('name', '')
+            var_name_upper = var_name.upper()
+            if self._is_java_param(var_name_upper):
                 value = env_var.get('value', '')
                 if value:
-                    return value
+                    found_params[var_name] = value
+        
         # valueFrom -> configMapKeyRef
         for env_var in env:
             value_from = env_var.get('valueFrom', {})
             cm_ref = value_from.get('configMapKeyRef') if isinstance(value_from, dict) else None
             if not cm_ref:
                 continue
-            key_name = env_var.get('name', '').upper()
-            if 'JAVA' in key_name and 'OPT' in key_name:
+            key_name = env_var.get('name', '')
+            key_name_upper = key_name.upper()
+            if self._is_java_param(key_name_upper):
                 cm_name = cm_ref.get('name')
                 cm_key = cm_ref.get('key')
                 val = self._lookup_configmap_value(db, namespace, cm_name, cm_key)
-                if val:
-                    return val
+                if val and key_name not in found_params:
+                    found_params[key_name] = val
+        
         # envFrom configMapRef entire data scan for likely JAVA options
         for env_from in container_def.get('envFrom', []) or []:
             cm_ref = env_from.get('configMapRef') if isinstance(env_from, dict) else None
@@ -297,12 +308,37 @@ class ContainerConfigurationReport(ReportGenerator):
             cm_name = cm_ref.get('name')
             data = self._lookup_configmap_data(db, namespace, cm_name)
             if data:
-                # look for keys containing JAVA_OPTS or similar
+                # look for keys containing Java parameters
                 for k, v in data.items():
                     ku = k.upper()
-                    if 'JAVA' in ku and 'OPT' in ku and v:
-                        return v
-        return "Not configured"
+                    if self._is_java_param(ku) and v and k not in found_params:
+                        found_params[k] = v
+        
+        # Format the result
+        if not found_params:
+            return "Not configured"
+        
+        # If only one parameter found, return just its value for backward compatibility
+        if len(found_params) == 1:
+            param_name, param_value = list(found_params.items())[0]
+            return param_value
+        
+        # If multiple parameters found, combine them with names for clarity
+        parts = [f"{name}={value}" for name, value in sorted(found_params.items())]
+        return "; ".join(parts)
+    
+    def _is_java_param(self, var_name_upper: str) -> bool:
+        """
+        Check if an environment variable name represents a Java parameter.
+        Matches JAVA_OPTS, CATALINA_OPTS, and similar patterns.
+        """
+        # Check for CATALINA_OPTS specifically (Tomcat)
+        if 'CATALINA_OPTS' in var_name_upper:
+            return True
+        # Check for patterns like JAVA_OPTS, JAVA_OPTIONS, etc.
+        if 'JAVA' in var_name_upper and 'OPT' in var_name_upper:
+            return True
+        return False
 
     def _lookup_configmap_value(self, db: WorkloadDB, namespace: str, name: str, key: str):
         if not (name and key):
@@ -374,7 +410,7 @@ class ContainerConfigurationReport(ReportGenerator):
                     "<strong>Image_Pull_Policy</strong>: Container image pull policy",
                     "<strong>Node_Selectors</strong>: nodeSelector key=value list or None",
                     "<strong>Pod_Labels</strong>: Pod template labels key=value list or None",
-                    "<strong>Java_Opts</strong>: Discovered JAVA options (env / ConfigMap) or Not configured"
+                    "<strong>Java_Parameters</strong>: Discovered Java options including JAVA_OPTS, CATALINA_OPTS, and similar parameters (from env or ConfigMap) or Not configured"
                 ]
             }
         ]

@@ -134,7 +134,7 @@ def test_containers_config_report_generation(tmp_path):
     assert "Image_Pull_Policy" in content
     assert "Node_Selectors" in content
     assert "Pod_Labels" in content
-    assert "Java_Opts" in content
+    assert "Java_Parameters" in content
     
     # Check data content
     assert "Deployment" in content

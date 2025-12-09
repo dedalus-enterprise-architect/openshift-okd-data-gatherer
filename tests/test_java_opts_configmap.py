@@ -107,8 +107,10 @@ def test_java_opts_configmap_scanning():
         }
         result = report._extract_java_opts(container_def, 'test-ns', db)
         print(f"Result: {result}")
-        # Should find the first Java-related key (JAVA_OPTS or JAVA_OPTIONS)
-        assert result in ['-Xmx2g -Xms512m -XX:+UseG1GC', '-server -Dprop=value'], f"Expected ConfigMap Java value, got: {result}"
+        # With envFrom, should find ALL Java-related keys (both JAVA_OPTS and JAVA_OPTIONS)
+        # The new behavior combines multiple Java parameters
+        assert 'JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC' in result, f"Expected JAVA_OPTS in result, got: {result}"
+        assert 'JAVA_OPTIONS=-server -Dprop=value' in result, f"Expected JAVA_OPTIONS in result, got: {result}"
 
         print("\n=== Test 5: No Java options configured ===")
         container_def = {

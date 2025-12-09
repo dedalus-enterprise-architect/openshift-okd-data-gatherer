@@ -92,9 +92,11 @@ def test_java_opts_patterns():
         }
         result = report._extract_java_opts(container_def, 'test-ns', db)
         print(f"Result: {result}")
-        # Should find one of the Java-related options
-        java_values = ['-Xmx2g -Xms512m', '-server -Dprop=value', '-Xmx1g', '-client', '-XX:+UseG1GC', '-Dproperty=value']
-        assert result in java_values, f"Expected one of {java_values}, got: {result}"
+        # With envFrom, should find ALL Java-related options combined
+        # The new behavior finds all Java parameters, not just the first one
+        assert 'JAVA_OPTS=-Xmx2g -Xms512m' in result, f"Expected JAVA_OPTS in result, got: {result}"
+        assert 'JAVA_OPTIONS=-server -Dprop=value' in result, f"Expected JAVA_OPTIONS in result, got: {result}"
+        assert 'CATALINA_JAVA_OPTS=-XX:+UseG1GC' in result, f"Expected CATALINA_JAVA_OPTS in result, got: {result}"
 
         print("\n=== All Java options pattern tests passed! ===")
 
