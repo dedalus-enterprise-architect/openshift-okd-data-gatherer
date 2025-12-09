@@ -113,6 +113,9 @@ class ContainerConfigurationReport(ReportGenerator):
         except ImportError:
             raise ImportError("openpyxl is required for Excel output. Install with: pip install openpyxl")
         
+        from data_gatherer.reporting.common import get_rules_engine
+        from data_gatherer.reporting.rules.base import RuleType
+        
         wb = Workbook()
         ws = wb.active
         ws.title = "Container Configuration"
@@ -133,6 +136,9 @@ class ContainerConfigurationReport(ReportGenerator):
         error_font = Font(color="721C24")
         warning_font = Font(color="856404")
         
+        # Get rules engine for consistent formatting
+        rules_engine = get_rules_engine()
+        
         # Write title
         ws.merge_cells('A1:P1')
         title_cell = ws['A1']
@@ -151,6 +157,9 @@ class ContainerConfigurationReport(ReportGenerator):
         
         # Write data rows with conditional formatting
         for row_idx, row_data in enumerate(table_rows, 4):
+            # Build row_data dictionary for rules engine
+            row_dict = {headers[j]: row_data[j] for j in range(min(len(headers), len(row_data)))}
+            
             for col_idx, value in enumerate(row_data, 1):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.value = value
@@ -159,24 +168,36 @@ class ContainerConfigurationReport(ReportGenerator):
                 # Apply conditional formatting based on column and value
                 header_name = headers[col_idx - 1] if col_idx <= len(headers) else ""
                 
-                # Apply formatting rules similar to HTML version
-                # Add comments for warnings/errors to match HTML tooltips
-                if header_name in ["CPU_req_m", "Mem_req_Mi"] and (value == "" or value is None):
+                # Use rules engine to determine formatting
+                context = {
+                    'cell_value': value,
+                    'column_name': header_name,
+                    'row_data': row_dict,
+                    'report_type': 'containers'
+                }
+                rule_result = rules_engine.evaluate_cell(context)
+                
+                # Apply formatting based on rule result
+                if rule_result.rule_type == RuleType.ERROR_MISS:
                     cell.fill = error_fill
                     cell.font = error_font
-                    cell.comment = Comment("Missing {} value".format(header_name.replace('_m', '').replace('_Mi', '')), "Copilot")
-                elif header_name in ["CPU_lim_m", "Mem_lim_Mi"] and (value == "" or value is None):
+                    if rule_result.message:
+                        cell.comment = Comment(rule_result.message, "Copilot")
+                elif rule_result.rule_type == RuleType.WARNING_MISS:
                     cell.fill = warning_fill
                     cell.font = warning_font
-                    cell.comment = Comment("Missing {} value".format(header_name.replace('_m', '').replace('_Mi', '')), "Copilot")
-                elif header_name == "Readiness_Probe" and value == "Not configured":
-                    cell.fill = error_fill
+                    if rule_result.message:
+                        cell.comment = Comment(rule_result.message, "Copilot")
+                elif rule_result.rule_type == RuleType.ERROR_MISCONF:
+                    # For misconfiguration errors, use text color only (no background)
                     cell.font = error_font
-                    cell.comment = Comment("ReadinessProbe missing", "Copilot")
-                elif header_name == "Image_Pull_Policy" and value == "Always":
-                    cell.fill = warning_fill
+                    if rule_result.message:
+                        cell.comment = Comment(rule_result.message, "Copilot")
+                elif rule_result.rule_type == RuleType.WARNING_MISCONF:
+                    # For misconfiguration warnings, use text color only (no background)
                     cell.font = warning_font
-                    cell.comment = Comment("ImagePullPolicy set to Always", "Copilot")
+                    if rule_result.message:
+                        cell.comment = Comment(rule_result.message, "Copilot")
                 
                 # Set alignment based on column type
                 if header_name in ["CPU_req_m", "CPU_lim_m", "Mem_req_Mi", "Mem_lim_Mi", "Replicas"]:
