@@ -27,7 +27,7 @@ def _get_file_extension(format_name: str, generator: Any) -> str:
         # Fallback to generator's default extension
         return getattr(generator, 'file_extension', '.html')
 
-@click.group(add_help_option=False)
+@click.group()
 @click.option('--config', default='config/config.yaml', help='Config file path')
 @click.pass_context
 def cli(ctx, config):
@@ -35,7 +35,7 @@ def cli(ctx, config):
     ctx.ensure_object(dict)
     ctx.obj['config'] = config
 
-@cli.command(add_help_option=False)
+@cli.command()
 @click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s); repeat for multiple')
 @click.option('--all-clusters', is_flag=True, help='Operate on all configured clusters')
 @click.pass_context
@@ -61,8 +61,8 @@ def init(ctx, clusters, all_clusters):
     if len(results) > 1:
         click.echo(json.dumps(results, indent=2))
 
-@cli.command(add_help_option=False)
-@click.option('--cluster', 'clusters', multiple=True)
+@cli.command()
+@click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to check status for')
 @click.option('--all-clusters', is_flag=True, help='Show status for all configured clusters')
 @click.pass_context
 def status(ctx, clusters, all_clusters):
@@ -109,8 +109,8 @@ def _fetch_kind_items(api_client, kind, api_version, plural, target, namespaced,
         log.error('failed to fetch kind', kind=kind, namespace=namespace, error=str(e))
         return kind, [], str(e)
 
-@cli.command(add_help_option=False)
-@click.option('--cluster', 'clusters', multiple=True)
+@cli.command()
+@click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to sync')
 @click.option('--all-clusters', is_flag=True, help='Sync all configured clusters')
 @click.option('--kind', multiple=True, help='Limit to specific kinds')
 @click.pass_context
@@ -240,7 +240,7 @@ def sync(ctx, clusters, all_clusters, kind):
         aggregate[cluster] = summary
     click.echo(json.dumps(aggregate if len(aggregate) > 1 else next(iter(aggregate.values())), indent=2))
 
-@cli.command(add_help_option=False)
+@cli.command()
 @click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to report on')
 @click.option('--all-clusters', is_flag=True, help='Generate reports for all configured clusters')
 @click.option('--type', 'report_type', default='summary', help='Report type (default: summary). Use --list-types to view all.')
@@ -250,6 +250,7 @@ def sync(ctx, clusters, all_clusters, kind):
 @click.option('--list-types', is_flag=True, help='List available report types and exit')
 @click.pass_context
 def report(ctx, clusters, all_clusters, report_type, output_format, out, all, list_types):
+    """Generate reports for one or more clusters."""
     from datetime import datetime
     from .reporting.base import get_report_types, get_generator
     from .reporting import summary_report  # noqa: F401
@@ -394,9 +395,10 @@ def report(ctx, clusters, all_clusters, report_type, output_format, out, all, li
             except Exception as e:
                 click.echo(f'[{cluster}] ✗ Failed {t}: {e}')
 
-@cli.command(add_help_option=False)
+@cli.command()
 @click.pass_context
 def kinds(ctx):
+    """List supported workload kinds and their API versions."""
     config = ctx.obj['config']
     cfg = load_config(config)
     log.configure_logging(cfg.logging.level, cfg.logging.format)
@@ -406,8 +408,8 @@ def kinds(ctx):
         scope = 'namespaced' if namespaced else 'cluster-scoped'
         click.echo(f'  {kind:18} {api_version:25} ({scope})')
 
-@cli.command(add_help_option=False)
-@click.option('--cluster', 'clusters', multiple=True)
+@cli.command()
+@click.option('--cluster', 'clusters', multiple=True, help='Cluster name(s) to list nodes for')
 @click.option('--all-clusters', is_flag=True, help='Show nodes for all configured clusters')
 @click.pass_context
 def nodes(ctx, clusters, all_clusters):
@@ -433,26 +435,6 @@ def nodes(ctx, clusters, all_clusters):
         node_records = nq.list_active_nodes(cluster)
         aggregate.append({'cluster': cluster, 'nodes': [n.to_dict() for n in node_records]})
     click.echo(json.dumps(aggregate if len(aggregate) > 1 else aggregate[0], indent=2))
-
-@cli.command('help', add_help_option=False)
-@click.argument('command', required=False)
-@click.pass_context
-def help_cmd(ctx, command):
-    """Show context-driven help for a command, or list all commands."""
-    group = ctx.parent.command if ctx.parent else ctx.command
-    if not command:
-        click.echo("Available commands:")
-        for cmd_name in group.commands:
-            click.echo(f"  {cmd_name}")
-        click.echo("\nRun 'python -m data_gatherer.run help <command>' for details.")
-        return
-    cmd = group.commands.get(command)
-    if not cmd:
-        click.echo(f"Unknown command: {command}")
-        click.echo("Run 'python -m data_gatherer.run help' to list available commands.")
-        return
-    with click.Context(cmd) as cmd_ctx:
-        click.echo(cmd.get_help(cmd_ctx))
 
 if __name__ == '__main__':
     cli()
