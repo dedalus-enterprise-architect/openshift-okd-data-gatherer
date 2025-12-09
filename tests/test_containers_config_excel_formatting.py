@@ -11,6 +11,13 @@ from data_gatherer.persistence.db import WorkloadDB
 from openpyxl import load_workbook
 
 
+# Color constants matching the openpyxl formatting
+# These colors correspond to the rule types in the rules engine
+WARNING_MISCONF_TEXT_COLORS = ["FF856404", "00856404", "856404"]  # Orange text
+ERROR_MISS_BG_COLORS = ["FFF8D7DA", "00F8D7DA", "F8D7DA"]  # Red background
+WARNING_MISS_BG_COLORS = ["FFFFF3CD", "00FFF3CD", "FFF3CD"]  # Yellow background
+
+
 def test_excel_request_limit_ratio_formatting(tmp_path):
     """Test that Excel report applies the 20% request/limit ratio rule."""
     # Create temporary database
@@ -141,8 +148,15 @@ def test_excel_request_limit_ratio_formatting(tmp_path):
             break
     
     # Find column indices for CPU_req_m and Mem_req_Mi
-    cpu_req_col = headers.index("CPU_req_m") + 1 if "CPU_req_m" in headers else None
-    mem_req_col = headers.index("Mem_req_Mi") + 1 if "Mem_req_Mi" in headers else None
+    try:
+        cpu_req_col = headers.index("CPU_req_m") + 1
+    except ValueError:
+        cpu_req_col = None
+    
+    try:
+        mem_req_col = headers.index("Mem_req_Mi") + 1
+    except ValueError:
+        mem_req_col = None
     
     assert cpu_req_col is not None, "CPU_req_m column not found"
     assert mem_req_col is not None, "Mem_req_Mi column not found"
@@ -169,11 +183,11 @@ def test_excel_request_limit_ratio_formatting(tmp_path):
     # WARNING_MISCONF uses orange text color (856404)
     assert cpu_req_cell_low.font.color is not None, "CPU request cell should have colored text for low ratio"
     # openpyxl may use different alpha channel prefixes (00, FF, or none)
-    assert cpu_req_cell_low.font.color.rgb in ["FF856404", "00856404", "856404"], \
+    assert cpu_req_cell_low.font.color.rgb in WARNING_MISCONF_TEXT_COLORS, \
         f"CPU request cell should have warning text color, got {cpu_req_cell_low.font.color.rgb}"
     
     assert mem_req_cell_low.font.color is not None, "Memory request cell should have colored text for low ratio"
-    assert mem_req_cell_low.font.color.rgb in ["FF856404", "00856404", "856404"], \
+    assert mem_req_cell_low.font.color.rgb in WARNING_MISCONF_TEXT_COLORS, \
         f"Memory request cell should have warning text color, got {mem_req_cell_low.font.color.rgb}"
     
     # Verify cells have comments explaining the issue
@@ -190,11 +204,11 @@ def test_excel_request_limit_ratio_formatting(tmp_path):
     # These cells should not have warning formatting
     # They might have no font color or default color
     if cpu_req_cell_good.font.color:
-        assert cpu_req_cell_good.font.color.rgb not in ["FF856404", "00856404", "856404"], \
+        assert cpu_req_cell_good.font.color.rgb not in WARNING_MISCONF_TEXT_COLORS, \
             "CPU request cell should not have warning color for good ratio"
     
     if mem_req_cell_good.font.color:
-        assert mem_req_cell_good.font.color.rgb not in ["FF856404", "00856404", "856404"], \
+        assert mem_req_cell_good.font.color.rgb not in WARNING_MISCONF_TEXT_COLORS, \
             "Memory request cell should not have warning color for good ratio"
 
 
@@ -261,10 +275,25 @@ def test_excel_missing_values_formatting(tmp_path):
             break
     
     # Find column indices
-    cpu_req_col = headers.index("CPU_req_m") + 1
-    cpu_lim_col = headers.index("CPU_lim_m") + 1
-    mem_req_col = headers.index("Mem_req_Mi") + 1
-    mem_lim_col = headers.index("Mem_lim_Mi") + 1
+    try:
+        cpu_req_col = headers.index("CPU_req_m") + 1
+    except ValueError:
+        pytest.fail("CPU_req_m column not found in headers")
+    
+    try:
+        cpu_lim_col = headers.index("CPU_lim_m") + 1
+    except ValueError:
+        pytest.fail("CPU_lim_m column not found in headers")
+    
+    try:
+        mem_req_col = headers.index("Mem_req_Mi") + 1
+    except ValueError:
+        pytest.fail("Mem_req_Mi column not found in headers")
+    
+    try:
+        mem_lim_col = headers.index("Mem_lim_Mi") + 1
+    except ValueError:
+        pytest.fail("Mem_lim_Mi column not found in headers")
     
     # Find the row for our test container
     missing_row = None
@@ -282,9 +311,9 @@ def test_excel_missing_values_formatting(tmp_path):
     
     # ERROR_MISS uses red background (F8D7DA)
     # openpyxl may use different alpha channel prefixes (00, FF, or none)
-    assert cpu_req_cell.fill.start_color.rgb in ["FFF8D7DA", "00F8D7DA", "F8D7DA"], \
+    assert cpu_req_cell.fill.start_color.rgb in ERROR_MISS_BG_COLORS, \
         f"CPU request cell should have error background, got {cpu_req_cell.fill.start_color.rgb}"
-    assert mem_req_cell.fill.start_color.rgb in ["FFF8D7DA", "00F8D7DA", "F8D7DA"], \
+    assert mem_req_cell.fill.start_color.rgb in ERROR_MISS_BG_COLORS, \
         f"Memory request cell should have error background, got {mem_req_cell.fill.start_color.rgb}"
     
     # Verify missing limit cells have warning formatting (yellow background)
@@ -292,7 +321,7 @@ def test_excel_missing_values_formatting(tmp_path):
     mem_lim_cell = ws.cell(row=missing_row, column=mem_lim_col)
     
     # WARNING_MISS uses yellow background (FFF3CD)
-    assert cpu_lim_cell.fill.start_color.rgb in ["FFFFF3CD", "00FFF3CD", "FFF3CD"], \
+    assert cpu_lim_cell.fill.start_color.rgb in WARNING_MISS_BG_COLORS, \
         f"CPU limit cell should have warning background, got {cpu_lim_cell.fill.start_color.rgb}"
-    assert mem_lim_cell.fill.start_color.rgb in ["FFFFF3CD", "00FFF3CD", "FFF3CD"], \
+    assert mem_lim_cell.fill.start_color.rgb in WARNING_MISS_BG_COLORS, \
         f"Memory limit cell should have warning background, got {mem_lim_cell.fill.start_color.rgb}"
