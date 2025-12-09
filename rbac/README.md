@@ -5,13 +5,14 @@ Dedicated directory for Role-Based Access Control assets used by the Data Gather
 
 ## Files
 Cluster-scoped (grants read across entire cluster):
+- `data-gatherer-clusterrole.yaml` - ClusterRole with read-only permissions
+- `data-gatherer-clusterrolebinding.yaml` - ClusterRoleBinding for the service account
+- `setup-rbac-cluster.sh` - Helper script to install cluster-scoped RBAC
 
 Namespace-scoped (restricts to explicit namespaces only):
- `data-gatherer-role-namespace.yaml` - Role applied per target namespace
- `data-gatherer-rolebinding-namespace.yaml` - RoleBinding applied per target namespace
- `setup-rbac-namespace.sh` - Helper script to install namespace-scoped RBAC for one or more namespaces
-
-Legacy / compatibility (will be removed in a future release):
+- `data-gatherer-role-namespace.yaml` - Role applied per target namespace
+- `data-gatherer-rolebinding-namespace.yaml` - RoleBinding applied per target namespace
+- `setup-rbac-namespace.sh` - Helper script to install namespace-scoped RBAC for one or more namespaces
 
 ## Script Features (Current)
 Both `setup-rbac-cluster.sh` and `setup-rbac-namespace.sh` support:

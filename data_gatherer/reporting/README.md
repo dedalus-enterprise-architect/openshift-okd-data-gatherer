@@ -151,12 +151,12 @@ python -m data_gatherer.run report --cluster prod --type cluster-capacity --form
 
 ### Getting Help
 
-Use the custom `help` command to list all available commands or get detailed help for a specific command:
+Use the standard `--help` flag to list all available commands or get detailed help for a specific command:
 
 ```bash
 # List all available commands
-python -m data_gatherer.run help
+python -m data_gatherer.run --help
 
 # Show help for a specific command (e.g., report)
-python -m data_gatherer.run help report
+python -m data_gatherer.run report --help
 ```
