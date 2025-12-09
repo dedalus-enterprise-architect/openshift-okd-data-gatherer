@@ -320,7 +320,7 @@ class ContainerConfigurationReport(ReportGenerator):
         
         # If only one parameter found, return just its value for backward compatibility
         if len(found_params) == 1:
-            param_name, param_value = list(found_params.items())[0]
+            param_name, param_value = next(iter(found_params.items()))
             return param_value
         
         # If multiple parameters found, combine them with names for clarity
@@ -332,10 +332,10 @@ class ContainerConfigurationReport(ReportGenerator):
         Check if an environment variable name represents a Java parameter.
         Matches JAVA_OPTS, CATALINA_OPTS, and similar patterns.
         """
-        # Check for CATALINA_OPTS specifically (Tomcat)
+        # Check for CATALINA_OPTS specifically (Tomcat-specific, doesn't follow JAVA_* naming)
         if 'CATALINA_OPTS' in var_name_upper:
             return True
-        # Check for patterns like JAVA_OPTS, JAVA_OPTIONS, etc.
+        # Check for patterns like JAVA_OPTS, JAVA_OPTIONS, etc. (contains both 'JAVA' and 'OPT')
         if 'JAVA' in var_name_upper and 'OPT' in var_name_upper:
             return True
         return False
